@@ -1,6 +1,8 @@
 # Aukenid.Core
 
-C# library for local GGUF chat, conversation storage, attachments, and web/wiki/scholar tools.
+Source code of the core component of Aukenid AI:  local GGUF chat, conversation storage, attachments, and web/wiki/scholar tools.
+
+Not for commercial or any other unauthorized usage. Read the License.
 
 ## Layout
 
@@ -25,9 +27,3 @@ Requires PowerShell 7 (`pwsh`) and a local `.gguf` file. The script builds `Auke
 ```
 
 The script loads the model, prints a reply, then keeps the conversation until you type `exit`, `quit`, or `end`.
-
-## Pack
-
-```bash
-dotnet pack src/Aukenid.Core.csproj -c Release
-```
