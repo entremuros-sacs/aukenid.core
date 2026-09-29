@@ -9,14 +9,19 @@
     <Title>Aukenid Core</Title>
     <Authors>Jaime Olivares</Authors>
     <Company>Entremuros SACS</Company>
+    <Copyright>Copyright © 2026 Entremuros SACS. All rights reserved.</Copyright>    
     <RepositoryUrl>https://github.com/entremuros-sacs/aukenid.core.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/entremuros-sacs/aukenid.core</PackageProjectUrl>
     <Description>Local GGUF chat engine, conversation store, attachments, and web/wiki/scholar tools for Aukenid.</Description>
     <PackageTags>aukenid;llm;gguf;llamasharp</PackageTags>
-    <!-- Class-library default leaves NuGet assemblies in the cache; Chat.ps1 loads this output folder. -->
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../LICENSE" Pack="true" PackagePath="" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="LLamaSharp" Version="0.27.0" />

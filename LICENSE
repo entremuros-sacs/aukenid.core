@@ -1,0 +1,32 @@
+Business Source License 1.1
+
+Copyright (c) 2026 Entremuros SACS
+
+Licensed under the Business Source License, Version 1.1 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://github.com/sql/bsl-1.1.txt  (o términos oficiales BSL 1.1)
+
+Consult the License for the terms of use of this software.
+The Licensor may grant you a "Additional Use Grant" sub-licensing 
+the software under terms that permit production use.
+
+------------------------------------------------------------------------------
+
+The Parameters of this License are:
+
+LICENSOR: Entremuros SACS
+LICENSED WORK: Aukenid Core
+CHANGE DATE: 5 years from the release date of each specific version.
+CHANGE LICENSE: Apache License, Version 2.0
+
+ADDITIONAL USE GRANT:
+1. You may use the Licensed Work for non-production development, testing, 
+   evaluation, and personal/educational use without charge.
+2. Production use of the official software provided by Entremuros SACS is 
+   permitted subject to the terms of the applicable Freemium or Commercial 
+   Subscription terms established by Entremuros SACS.
+3. Competitors are strictly prohibited from offering the Licensed Work as 
+   a managed, commercial, or paid service or commercializing forks without 
+   express written authorization from Entremuros SACS.
