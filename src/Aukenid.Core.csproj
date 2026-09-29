@@ -1,26 +1,31 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Title>Aukenid Core</Title>
+    <Description>Local GGUF chat engine, conversation store, attachments, and web/wiki/scholar tools for Aukenid.</Description>
+    <VersionPrefix>3.8.1</VersionPrefix>    
+
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <RootNamespace>Aukenid.Core</RootNamespace>
     <IsPackable>true</IsPackable>
-    <PackageId>Aukenid.Core</PackageId>
-    <Title>Aukenid Core</Title>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    
     <Authors>Jaime Olivares</Authors>
     <Company>Entremuros SACS</Company>
     <Copyright>Copyright © 2026 Entremuros SACS. All rights reserved.</Copyright>    
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+
+    <PackageId>Aukenid.Core</PackageId>
+    <PackageTags>aukenid;llm;gguf;llamasharp</PackageTags>
+
     <RepositoryUrl>https://github.com/entremuros-sacs/aukenid.core.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/entremuros-sacs/aukenid.core</PackageProjectUrl>
-    <Description>Local GGUF chat engine, conversation store, attachments, and web/wiki/scholar tools for Aukenid.</Description>
-    <PackageTags>aukenid;llm;gguf;llamasharp</PackageTags>
-    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="../../LICENSE" Pack="true" PackagePath="" />
+    <None Include="../LICENSE" Pack="true" PackagePath="" />
   </ItemGroup>
 
   <ItemGroup>
@@ -44,9 +49,18 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Pack>true</Pack>
+      <PackageCopyToOutput>true</PackageCopyToOutput>
       <PackagePath>contentFiles/any/any/tessdata</PackagePath>
     </Content>
   </ItemGroup>
+
+  <!-- LLamaSharp.Backend.Cpu.props adds every RID's natives as Content; packing them
+       collides on one path and ships a single arbitrary RID. -->
+  <Target Name="ExcludeLLamaSharpNativesFromPack" BeforeTargets="_GetPackageFiles">
+    <ItemGroup>
+      <Content Update="@(Content)" Condition="$([System.String]::Copy('%(Identity)').Contains('LLamaSharpRuntimes'))" Pack="false" />
+    </ItemGroup>
+  </Target>
 
   <!-- Tesseract.Native ships per-RID binaries. A build without -r does not copy them. -->
   <Target Name="CopyTesseractNative" AfterTargets="Build">
