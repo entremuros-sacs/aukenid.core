@@ -5,15 +5,23 @@ namespace Aukenid.Core.Tests;
 public sealed class GalleryTemplateTests
 {
     [Fact]
-    public void ShippedData_MapsGalleryIdToLlamaCppName()
+    public void ShippedTemplates_MapFamilyToLlamaCppName()
     {
         var dir = GalleryTemplate.DefaultDirectory();
-        Assert.Equal("gemma4", GalleryTemplate.GalleryName(dir, "gemma4-e2b-it", null));
         Assert.Equal("gemma", GalleryTemplate.LlamaCppName(dir, "gemma4"));
         Assert.Equal("gemma", GalleryTemplate.LlamaCppName(dir, "gemma"));
         Assert.Equal(
             "gemma4",
-            GalleryTemplate.GalleryName(dir, null, "/tmp/gemma4-e2b-it.gguf"));
+            GalleryTemplate.FamilyFromMetadata(dir, new Dictionary<string, string>
+            {
+                ["general.architecture"] = "gemma3",
+            }));
+        Assert.Equal(
+            "llama3",
+            GalleryTemplate.FamilyFromMetadata(dir, new Dictionary<string, string>
+            {
+                ["general.architecture"] = "llama",
+            }));
     }
 
     [Fact]

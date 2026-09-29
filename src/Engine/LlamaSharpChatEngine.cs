@@ -68,7 +68,7 @@ public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
             _executor = newExecutor;
             _weightsPath = path;
             previous?.Dispose();
-            _templateName ??= GalleryTemplate.GalleryName(_dataDirectory, profileId, path);
+            _templateName ??= GalleryTemplate.FamilyFromMetadata(_dataDirectory, newWeights.Metadata);
             ActiveModelName = BuildShortName(_weights.Metadata);
         }, cancellationToken);
     }

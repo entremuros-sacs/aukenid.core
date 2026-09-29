@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Sockets;
 using Aukenid.Core.Engine;
 using Aukenid.Core.Services;
 
