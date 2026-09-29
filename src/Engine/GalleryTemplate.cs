@@ -6,9 +6,8 @@ using System.IO;
 using System.Text.Json;
 
 /// <summary>
-/// Maps a chat-template family (templates.json <c>template</c>, or GGUF architecture) to
-/// llama.cpp's named chat template via the <c>apply</c> field. Optional models.json in a host
-/// data directory is the Desktop gallery catalog, not shipped with Core.
+/// Resolves a chat-template family to llama.cpp's named template via <see cref="ChatTemplate.All"/>.
+/// Optional models.json in a host data directory is the Desktop gallery catalog, not shipped with Core.
 /// </summary>
 internal static class GalleryTemplate
 {
@@ -18,45 +17,17 @@ internal static class GalleryTemplate
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
 
-    internal static string DefaultDirectory()
+    public static string? LlamaCppName(string? galleryTemplate) =>
+        MatchExact(galleryTemplate)?.Apply;
+
+    public static string? FamilyFromMetadata(IReadOnlyDictionary<string, string> metadata)
     {
-        var root = Path.GetDirectoryName(typeof(GalleryTemplate).Assembly.Location);
-        if (string.IsNullOrWhiteSpace(root))
-        {
-            root = AppContext.BaseDirectory;
-        }
-
-        var nextToAssembly = Path.Combine(root, "wwwroot", "data");
-        return Directory.Exists(nextToAssembly)
-            ? nextToAssembly
-            : Path.Combine(root, "data");
-    }
-
-    public static string? LlamaCppName(string dataDirectory, string? galleryTemplate)
-    {
-        var row = MatchExact(LoadTemplateRows(dataDirectory), galleryTemplate);
-        if (row is null)
-        {
-            return null;
-        }
-
-        return string.IsNullOrWhiteSpace(row.Apply) ? row.Template : row.Apply;
-    }
-
-    public static string? FamilyFromMetadata(string dataDirectory, IReadOnlyDictionary<string, string> metadata)
-    {
-        var rows = LoadTemplateRows(dataDirectory);
-        if (rows is null || rows.Count == 0)
-        {
-            return null;
-        }
-
         foreach (var key in MetadataKeys(metadata))
         {
-            var row = MatchExact(rows, key) ?? MatchPrefix(rows, key);
+            var row = MatchExact(key) ?? MatchPrefix(key);
             if (row is not null)
             {
-                return row.Template;
+                return row.Family;
             }
         }
 
@@ -69,37 +40,40 @@ internal static class GalleryTemplate
     public static string? GalleryHash(string dataDirectory, string? modelId, string? weightsPath) =>
         FindModel(dataDirectory, modelId, weightsPath)?.Hash;
 
-    private static List<TemplateRow>? LoadTemplateRows(string dataDirectory)
+    private static ChatTemplate? MatchExact(string? key)
     {
-        var path = Path.Combine(dataDirectory, "templates.json");
-        if (!File.Exists(path))
+        if (string.IsNullOrWhiteSpace(key))
         {
             return null;
         }
 
-        return JsonSerializer.Deserialize<List<TemplateRow>>(File.ReadAllText(path), JsonOptions);
-    }
-
-    private static TemplateRow? MatchExact(List<TemplateRow>? rows, string? key)
-    {
-        if (rows is null || string.IsNullOrWhiteSpace(key))
+        foreach (var item in ChatTemplate.All)
         {
-            return null;
+            if (item.Family.Equals(key, StringComparison.OrdinalIgnoreCase)
+                || item.Apply.Equals(key, StringComparison.OrdinalIgnoreCase))
+            {
+                return item;
+            }
         }
 
-        return rows.Find(item =>
-            item.Template.Equals(key, StringComparison.OrdinalIgnoreCase)
-            || (!string.IsNullOrWhiteSpace(item.Apply)
-                && item.Apply.Equals(key, StringComparison.OrdinalIgnoreCase)));
+        return null;
     }
 
-    private static TemplateRow? MatchPrefix(List<TemplateRow> rows, string key) =>
-        rows.Find(item =>
-            item.Template.StartsWith(key, StringComparison.OrdinalIgnoreCase)
-            || key.StartsWith(item.Template, StringComparison.OrdinalIgnoreCase)
-            || (!string.IsNullOrWhiteSpace(item.Apply)
-                && (item.Apply.StartsWith(key, StringComparison.OrdinalIgnoreCase)
-                    || key.StartsWith(item.Apply, StringComparison.OrdinalIgnoreCase))));
+    private static ChatTemplate? MatchPrefix(string key)
+    {
+        foreach (var item in ChatTemplate.All)
+        {
+            if (item.Family.StartsWith(key, StringComparison.OrdinalIgnoreCase)
+                || key.StartsWith(item.Family, StringComparison.OrdinalIgnoreCase)
+                || item.Apply.StartsWith(key, StringComparison.OrdinalIgnoreCase)
+                || key.StartsWith(item.Apply, StringComparison.OrdinalIgnoreCase))
+            {
+                return item;
+            }
+        }
+
+        return null;
+    }
 
     private static IEnumerable<string> MetadataKeys(IReadOnlyDictionary<string, string> metadata)
     {
@@ -189,8 +163,6 @@ internal static class GalleryTemplate
         var name = Path.GetFileName(uri.LocalPath);
         return string.IsNullOrWhiteSpace(name) ? null : name;
     }
-
-    private sealed record TemplateRow(string Template, string? Apply);
 
     private sealed class ModelRow
     {

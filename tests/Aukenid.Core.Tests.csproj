@@ -30,11 +30,9 @@
     <ItemGroup>
       <_OcrNative Include="$(_CoreOut)libtesseract*.dylib;$(_CoreOut)libleptonica*.dylib;$(_CoreOut)tesseract*.dll;$(_CoreOut)leptonica*.dll" />
       <_TessData Include="$(_CoreOut)tessdata\*.traineddata" />
-      <_GalleryData Include="$(_CoreOut)wwwroot\data\*.json" />
     </ItemGroup>
     <Copy SourceFiles="@(_OcrNative)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" Condition="'@(_OcrNative)' != ''" />
     <Copy SourceFiles="@(_TessData)" DestinationFolder="$(OutputPath)tessdata\" SkipUnchangedFiles="true" Condition="'@(_TessData)' != ''" />
-    <Copy SourceFiles="@(_GalleryData)" DestinationFolder="$(OutputPath)wwwroot\data\" SkipUnchangedFiles="true" Condition="'@(_GalleryData)' != ''" />
   </Target>
 
 </Project>

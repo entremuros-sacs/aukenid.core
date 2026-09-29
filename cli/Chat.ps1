@@ -164,8 +164,7 @@ $bin = Join-Path $repoRoot 'src' 'bin' 'Debug' 'net10.0'
 Import-AukenidCore -BinDirectory $bin
 
 [Aukenid.Core.Engine.LlamaSharpChatEngine]::PrepareRuntime()
-$data = Join-Path $bin 'wwwroot' 'data'
-$engine = [Aukenid.Core.Engine.LlamaSharpChatEngine]::new($ggufPath, $data)
+$engine = [Aukenid.Core.Engine.LlamaSharpChatEngine]::new($ggufPath)
 try {
     if ($Template) {
         $engine.UseTemplate($Template)

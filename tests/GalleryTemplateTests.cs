@@ -5,50 +5,25 @@ namespace Aukenid.Core.Tests;
 public sealed class GalleryTemplateTests
 {
     [Fact]
-    public void ShippedTemplates_MapFamilyToLlamaCppName()
+    public void ChatTemplateAll_MapsFamilyToLlamaCppName()
     {
-        var dir = GalleryTemplate.DefaultDirectory();
-        Assert.Equal("gemma", GalleryTemplate.LlamaCppName(dir, "gemma4"));
-        Assert.Equal("gemma", GalleryTemplate.LlamaCppName(dir, "gemma"));
+        Assert.Equal("gemma", GalleryTemplate.LlamaCppName("gemma4"));
+        Assert.Equal("gemma", GalleryTemplate.LlamaCppName("gemma"));
+        Assert.Equal("mistral-v1", GalleryTemplate.LlamaCppName("mistral"));
+        Assert.Equal("chatml", GalleryTemplate.LlamaCppName("qwen3"));
+        Assert.Null(GalleryTemplate.LlamaCppName("missing"));
         Assert.Equal(
             "gemma4",
-            GalleryTemplate.FamilyFromMetadata(dir, new Dictionary<string, string>
+            GalleryTemplate.FamilyFromMetadata(new Dictionary<string, string>
             {
                 ["general.architecture"] = "gemma3",
             }));
         Assert.Equal(
             "llama3",
-            GalleryTemplate.FamilyFromMetadata(dir, new Dictionary<string, string>
+            GalleryTemplate.FamilyFromMetadata(new Dictionary<string, string>
             {
                 ["general.architecture"] = "llama",
             }));
-    }
-
-    [Fact]
-    public void LlamaCppName_UsesApplyField()
-    {
-        var dir = Path.Combine(Path.GetTempPath(), "aukenid-template-tests", Guid.NewGuid().ToString("N"));
-        try
-        {
-            Directory.CreateDirectory(dir);
-            File.WriteAllText(Path.Combine(dir, "templates.json"), """
-                [
-                  { "template": "mistral", "apply": "mistral-v1" },
-                  { "template": "qwen3", "apply": "chatml" }
-                ]
-                """);
-
-            Assert.Equal("mistral-v1", GalleryTemplate.LlamaCppName(dir, "mistral"));
-            Assert.Equal("chatml", GalleryTemplate.LlamaCppName(dir, "qwen3"));
-            Assert.Null(GalleryTemplate.LlamaCppName(dir, "missing"));
-        }
-        finally
-        {
-            if (Directory.Exists(dir))
-            {
-                Directory.Delete(dir, recursive: true);
-            }
-        }
     }
 
     [Fact]

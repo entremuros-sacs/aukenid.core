@@ -14,7 +14,6 @@ using LLama.Transformers;
 
 public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
 {
-    private readonly string _dataDirectory;
     private string _weightsPath;
     private LLamaWeights? _weights;
     private StatelessExecutor? _executor;
@@ -32,10 +31,9 @@ public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
     /// </summary>
     public static void PrepareRuntime() => NativeRuntime.Prepare();
 
-    public LlamaSharpChatEngine(string weightsPath, string? dataDirectory = null)
+    public LlamaSharpChatEngine(string weightsPath)
     {
         _weightsPath = weightsPath;
-        _dataDirectory = dataDirectory ?? GalleryTemplate.DefaultDirectory();
     }
 
     public void UseTemplate(string? templateName) => _templateName = templateName;
@@ -68,7 +66,7 @@ public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
             _executor = newExecutor;
             _weightsPath = path;
             previous?.Dispose();
-            _templateName ??= GalleryTemplate.FamilyFromMetadata(_dataDirectory, newWeights.Metadata);
+            _templateName ??= GalleryTemplate.FamilyFromMetadata(newWeights.Metadata);
             ActiveModelName = BuildShortName(_weights.Metadata);
         }, cancellationToken);
     }
@@ -157,11 +155,11 @@ public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
     }
 
     // StatelessExecutor has no KV memory across calls, so every turn is a fresh completion.
-    // Use llama.cpp's named template from templates.json `apply`, not the GGUF jinja blob
+    // Use llama.cpp's named template from ChatTemplate.All, not the GGUF jinja blob
     // (those often fail llama_chat_apply_template).
     private string FormatTurns(IReadOnlyList<ChatTurn> turns)
     {
-        var cppName = GalleryTemplate.LlamaCppName(_dataDirectory, _templateName);
+        var cppName = GalleryTemplate.LlamaCppName(_templateName);
         var template = cppName is not null
             ? new LLamaTemplate(cppName) { AddAssistant = true }
             : new LLamaTemplate(_weights!.NativeHandle) { AddAssistant = true };
