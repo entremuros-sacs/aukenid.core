@@ -1,0 +1,50 @@
+[
+  {
+    "template": "gemma4",
+    "apply": "gemma",
+    "description": "Google Gemma format using turn-based start/end tags",
+    "bos_token": "<bos>",
+    "eos_token": "<end_of_turn>",
+    "format": "<start_of_turn>user\n{user_message}<end_of_turn>\n<start_of_turn>model\n{assistant_response}<end_of_turn>"
+  },
+  {
+    "template": "phi4",
+    "apply": "phi3",
+    "description": "Microsoft Phi-4 format using explicit role tags and end tokens",
+    "bos_token": null,
+    "eos_token": "<|end|>",
+    "format": "<|system|>\n{system_message}<|end|>\n<|user|>\n{user_message}<|end|>\n<|assistant|>\n{assistant_response}<|end|>"
+  },
+  {
+    "template": "qwen3",
+    "apply": "chatml",
+    "description": "ChatML format used by Alibaba Qwen models",
+    "bos_token": null,
+    "eos_token": "<|im_end|>",
+    "format": "<|im_start|>system\n{system_message}<|im_end|>\n<|im_start|>user\n{user_message}<|im_end|>\n<|im_start|>assistant\n{assistant_response}<|im_end|>"
+  },
+  {
+    "template": "llama3",
+    "apply": "llama3",
+    "description": "Meta Llama 3 format using header IDs and end-of-turn tokens",
+    "bos_token": "<|begin_of_text|>",
+    "eos_token": "<|eot_id|>",
+    "format": "<|start_header_id|>system<|end_header_id|>\n\n{system_message}<|eot_id|>\n<|start_header_id|>user<|end_header_id|>\n\n{user_message}<|eot_id|>\n<|start_header_id|>assistant<|end_header_id|>\n\n{assistant_response}<|eot_id|>"
+  },
+  {
+    "template": "granite",
+    "apply": "granite",
+    "description": "IBM Granite format using role boundaries and end-of-text markers",
+    "bos_token": null,
+    "eos_token": "<|end_of_text|>",
+    "format": "<|start_of_role|>system<|end_of_role|>{system_message}<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>{user_message}<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>{assistant_response}<|end_of_text|>"
+  },
+  {
+    "template": "mistral",
+    "apply": "mistral-v1",
+    "description": "Mistral AI format using instruction tags",
+    "bos_token": "<s>",
+    "eos_token": "</s>",
+    "format": "<s>[INST] {user_message} [/INST] {assistant_response}</s>"
+  }
+]

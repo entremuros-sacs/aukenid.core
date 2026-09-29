@@ -1,0 +1,65 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Aukenid.Core</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <PackageId>Aukenid.Core</PackageId>
+    <Title>Aukenid Core</Title>
+    <Authors>Jaime Olivares</Authors>
+    <Company>Entremuros SACS</Company>
+    <RepositoryUrl>https://github.com/entremuros-sacs/aukenid.core.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/entremuros-sacs/aukenid.core</PackageProjectUrl>
+    <Description>Local GGUF chat engine, conversation store, attachments, and web/wiki/scholar tools for Aukenid.</Description>
+    <PackageTags>aukenid;llm;gguf;llamasharp</PackageTags>
+    <!-- Class-library default leaves NuGet assemblies in the cache; Chat.ps1 loads this output folder. -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LLamaSharp" Version="0.27.0" />
+    <PackageReference Include="LLamaSharp.Backend.Cpu" Version="0.27.0" />
+    <PackageReference Include="Markdig" Version="1.4.0" />
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+    <PackageReference Include="PDFtoImage" Version="5.4.0" />
+    <PackageReference Include="QuestPDF" Version="2026.9.0" />
+    <PackageReference Include="Tesseract.CrossPlatform" Version="5.5.2.200" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aukenid.Core.Tests" />
+    <InternalsVisibleTo Include="Aukenid.Desktop.Tests" />
+    <InternalsVisibleTo Include="AukenidAI" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="wwwroot\data\*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <Pack>true</Pack>
+      <PackagePath>contentFiles/any/any/wwwroot/data</PackagePath>
+    </Content>
+    <Content Include="tessdata\*.traineddata">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <Pack>true</Pack>
+      <PackagePath>contentFiles/any/any/tessdata</PackagePath>
+    </Content>
+  </ItemGroup>
+
+  <!-- Tesseract.Native ships per-RID binaries. A build without -r does not copy them. -->
+  <Target Name="CopyTesseractNative" AfterTargets="Build">
+    <PropertyGroup>
+      <_TessRid Condition="$([MSBuild]::IsOSPlatform('OSX'))">osx-arm64</_TessRid>
+      <_TessRid Condition="$([MSBuild]::IsOSPlatform('Windows'))">win-x64</_TessRid>
+    </PropertyGroup>
+    <ItemGroup>
+      <_TessNative Include="$(NuGetPackageRoot)tesseract.native.runtime.$(_TessRid)\*\runtimes\$(_TessRid)\native\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_TessNative)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" Condition="'@(_TessNative)' != ''" />
+  </Target>
+
+</Project>
