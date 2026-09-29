@@ -1,7 +1,10 @@
 namespace Aukenid.Core.Attachments;
 
+using System;
+using System.Collections.Generic;
+using System.IO;
 using Aukenid.Core.Engine;
-using Aukenid.Core.Ocr;
+using Aukenid.Core.Services;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
 using UglyToad.PdfPig.Util;

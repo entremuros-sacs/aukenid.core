@@ -1,3 +1,7 @@
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace Aukenid.Core.Engine;
 
 /// <summary>Local web.search DTO. Vendor HTML/JSON is not passed through to the UI or the GGUF.</summary>

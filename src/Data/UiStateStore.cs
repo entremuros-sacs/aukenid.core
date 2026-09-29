@@ -1,6 +1,8 @@
 namespace Aukenid.Core.Data;
 
+using System.IO;
 using System.Text.Json;
+using System.Threading;
 
 /// <summary>Remembers which sidebar folder was last expanded across app launches.</summary>
 public sealed class UiStateStore

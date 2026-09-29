@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using System.Linq;
+
 namespace Aukenid.Core.Attachments;
 
 internal sealed class AttachmentReaderRegistry

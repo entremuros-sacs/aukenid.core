@@ -1,6 +1,13 @@
-namespace Aukenid.Core.Platform;
+namespace Aukenid.Core.Engine;
 
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
 using System.Security.Cryptography;
+using System.Threading;
+using System.Threading.Tasks;
 
 /// <summary>Folder where GGUF model files live, created on first run.</summary>
 public sealed class ModelStore

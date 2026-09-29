@@ -1,5 +1,7 @@
 namespace Aukenid.Core.Data;
 
+using System;
+using System.Collections.Generic;
 using System.Text;
 
 /// <summary>Reversibly encodes titles into filesystem-safe, human-readable file/folder names.</summary>

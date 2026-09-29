@@ -1,6 +1,10 @@
 namespace Aukenid.Core.Data;
 
+using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
+using System.Linq;
 using Aukenid.Core.Contracts;
 
 /// <summary>Reads and writes the markdown format used to persist a single conversation.</summary>

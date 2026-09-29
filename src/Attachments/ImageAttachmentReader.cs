@@ -1,6 +1,9 @@
 namespace Aukenid.Core.Attachments;
 
-using Aukenid.Core.Ocr;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using Aukenid.Core.Services;
 
 internal sealed class ImageAttachmentReader : IAttachmentReader
 {

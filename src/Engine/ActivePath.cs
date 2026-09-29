@@ -1,5 +1,7 @@
 namespace Aukenid.Core.Engine;
 
+using System;
+using System.Collections.Generic;
 using Aukenid.Core.Contracts;
 
 public readonly record struct ChatTurn(string Role, string Content);

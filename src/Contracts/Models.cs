@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 namespace Aukenid.Core.Contracts;
 
 public sealed record ThreadDto(

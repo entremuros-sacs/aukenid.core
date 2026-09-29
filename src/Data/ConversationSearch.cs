@@ -1,5 +1,8 @@
 namespace Aukenid.Core.Data;
 
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Aukenid.Core.Contracts;
 
 public sealed record SearchOccurrence(string ThreadId, string MessageId, int Offset, int Length);

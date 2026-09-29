@@ -1,3 +1,7 @@
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace Aukenid.Core.Engine;
 
 public interface IChatEngine

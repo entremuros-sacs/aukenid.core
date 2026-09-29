@@ -52,7 +52,3 @@ CodeCoverage/
 # MSTest test Results
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
-
-# Desktop UI toolchain
-node_modules/
-**/app.js

@@ -1,6 +1,11 @@
 namespace Aukenid.Core.Data;
 
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using Aukenid.Core.Contracts;
 
 public sealed record BookmarkItem(string MessageId, string Text);

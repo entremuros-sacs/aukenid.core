@@ -1,5 +1,7 @@
 namespace Aukenid.Core.Services;
 
+using System;
+using System.Collections.Generic;
 using Aukenid.Core.Contracts;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;

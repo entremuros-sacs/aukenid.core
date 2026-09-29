@@ -1,3 +1,7 @@
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace Aukenid.Core.Engine;
 
 /// <summary>One Wikipedia article. MediaWiki/Wikidata JSON is not passed through to the UI or the GGUF.</summary>

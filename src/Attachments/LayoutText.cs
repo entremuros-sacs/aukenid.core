@@ -1,6 +1,9 @@
 namespace Aukenid.Core.Attachments;
 
+using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 
 internal readonly record struct PlacedWord(int Page, string Text, float X, float Y, float W, float H);

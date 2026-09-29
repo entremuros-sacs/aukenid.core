@@ -1,5 +1,8 @@
-namespace Aukenid.Core.Ocr;
+namespace Aukenid.Core.Services;
 
+using System;
+using System.Collections.Generic;
+using System.IO;
 using Aukenid.Core.Attachments;
 using Aukenid.Core.Engine;
 using PDFtoImage;

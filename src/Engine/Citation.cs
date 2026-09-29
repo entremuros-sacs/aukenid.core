@@ -1,5 +1,8 @@
 namespace Aukenid.Core.Engine;
 
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 public readonly record struct Citation(string Title, string Url);

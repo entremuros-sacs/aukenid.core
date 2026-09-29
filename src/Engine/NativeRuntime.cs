@@ -1,5 +1,9 @@
 namespace Aukenid.Core.Engine;
 
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using LLama.Native;
 

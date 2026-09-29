@@ -3,6 +3,9 @@ namespace Aukenid.Core.Engine;
 using System.Text;
 using Aukenid.Core.Data;
 using Aukenid.Core.Contracts;
+using System.Collections.Generic;
+using System;
+using System.Linq;
 
 /// <summary>
 /// Shared background from sibling threads in a custom folder (ChatGPT Projects-style).

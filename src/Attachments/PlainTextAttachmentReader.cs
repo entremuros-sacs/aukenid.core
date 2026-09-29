@@ -1,5 +1,8 @@
 namespace Aukenid.Core.Attachments;
 
+using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Text;
 
 internal sealed class PlainTextAttachmentReader : IAttachmentReader

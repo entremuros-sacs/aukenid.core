@@ -1,5 +1,7 @@
 namespace Aukenid.Core.Engine;
 
+using System;
+using System.Collections.Generic;
 using LLama.Native;
 
 /// <summary>

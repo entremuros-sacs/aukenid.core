@@ -1,9 +1,11 @@
 namespace Aukenid.Core.Attachments;
 
 using System.Globalization;
+using System;
+using System.Collections.Generic;
 using System.Text;
-using System.Text.RegularExpressions;
 using Aukenid.Core.Engine;
+using System.Text.RegularExpressions;
 
 /// <summary>
 /// A document that does not fit beside the conversation is read in slices. Each slice

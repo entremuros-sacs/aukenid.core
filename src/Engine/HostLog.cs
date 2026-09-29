@@ -1,5 +1,6 @@
 namespace Aukenid.Core.Engine;
 
+using System;
 using System.Text.RegularExpressions;
 
 /// <summary>Short host diagnostics on stderr. Never dump prompts, attachment paths, or file contents.</summary>
