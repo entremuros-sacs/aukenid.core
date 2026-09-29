@@ -111,20 +111,27 @@ namespace Aukenid.Cli
 function Invoke-AukenidReply {
     param(
         [Parameter(Mandatory = $true)] $Engine,
+        [Parameter(Mandatory = $true)] $Grounding,
         [Parameter(Mandatory = $true)] $Turns,
         [Parameter(Mandatory = $true)][string] $Text
     )
 
-    $Turns.Add([Aukenid.Core.Engine.ChatTurn]::new('user', $Text)) | Out-Null
     Write-Host -NoNewline 'aukenid> '
-    $reply = Wait-Task ($Engine.CompleteAsync($Turns, [System.Threading.CancellationToken]::None))
+    $result = Wait-Task ($Grounding.ReplyAsync($Engine, $Turns, $Text, [System.Threading.CancellationToken]::None))
+    $plan = $result.Plan
+    if ($plan.Any) {
+        $tools = @()
+        if ($plan.Web) { $tools += 'web' }
+        if ($plan.Wiki) { $tools += 'wiki' }
+        if ($plan.Scholar) { $tools += 'scholar' }
+        Write-Host ($PSStyle.Foreground.FromRgb(140, 140, 140) + "[$($tools -join ', ')]" + $PSStyle.Reset)
+    }
     # Mid steel blue (~#5894CC): readable on both light and dark terminals.
-    Write-Host ($PSStyle.Foreground.FromRgb(88, 148, 204) + $reply + $PSStyle.Reset)
-    if ($Engine.StreamNoticeKey) {
-        Write-Host "[$($Engine.StreamNoticeKey)]"
+    Write-Host ($PSStyle.Foreground.FromRgb(88, 148, 204) + $result.Text + $PSStyle.Reset)
+    if ($result.NoticeKey) {
+        Write-Host "[$($result.NoticeKey)]"
     }
     Write-Host
-    $Turns.Add([Aukenid.Core.Engine.ChatTurn]::new('assistant', $reply)) | Out-Null
 }
 
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
@@ -173,11 +180,12 @@ try {
     Write-Host "Ready ($name). Type exit, quit, or end to stop."
     Write-Host
 
+    $grounding = [Aukenid.Core.Services.GroundedChat]::CreateDefault()
     $turns = [System.Collections.Generic.List[Aukenid.Core.Engine.ChatTurn]]::new()
     $exitWords = [string[]]@('exit', 'quit', 'end')
 
     if ($Prompt) {
-        Invoke-AukenidReply -Engine $engine -Turns $turns -Text $Prompt.Trim()
+        Invoke-AukenidReply -Engine $engine -Grounding $grounding -Turns $turns -Text $Prompt.Trim()
     }
 
     while ($true) {
@@ -196,7 +204,7 @@ try {
             break
         }
 
-        Invoke-AukenidReply -Engine $engine -Turns $turns -Text $text
+        Invoke-AukenidReply -Engine $engine -Grounding $grounding -Turns $turns -Text $text
     }
 }
 finally {
