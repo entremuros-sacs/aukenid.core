@@ -1,6 +1,7 @@
 using Aukenid.Core.Attachments;
 using Aukenid.Core.Data;
 using Aukenid.Core.Contracts;
+using Aukenid.Core.Services;
 
 namespace Aukenid.Core.Tests;
 
@@ -395,6 +396,7 @@ public sealed class AttachmentTests
         }
         finally
         {
+            TesseractOcr.ReleaseEngines();
             if (File.Exists(png)) File.Delete(png);
             if (File.Exists(swift)) File.Delete(swift);
         }
