@@ -16,6 +16,37 @@ public static class FolderContext
     public const int MaxTotalChars = 4000;
     public const int MaxCharsPerThread = 1200;
 
+    /// <summary>
+    /// Reading every non-empty sibling's file is the expensive part of folder context. At or
+    /// below this many siblings it is cheap enough to always build; past it, the caller should
+    /// gate on whether the turn's router plan actually says it is needed.
+    /// </summary>
+    public const int CheapSiblingThreshold = 3;
+
+    /// <summary>
+    /// True when this folder has enough non-empty siblings that always reading every one of
+    /// them on every turn would be wasteful. Counts via <see cref="ThreadDto.HasMessages"/> only,
+    /// no file I/O.
+    /// </summary>
+    public static bool IsHeavy(
+        string folderPath,
+        string currentThreadId,
+        IReadOnlyList<ThreadDto> threads,
+        int threshold = CheapSiblingThreshold)
+    {
+        if (!ConversationStore.IsCustomFolder(folderPath))
+        {
+            return false;
+        }
+
+        var count = threads.Count(t =>
+            t.Id != currentThreadId
+            && t.HasMessages
+            && t.FolderPath.Equals(folderPath, StringComparison.OrdinalIgnoreCase));
+
+        return count > threshold;
+    }
+
     public static ChatTurn? TryTurn(
         string folderPath,
         string folderName,

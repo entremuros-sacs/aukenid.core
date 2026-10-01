@@ -11,7 +11,7 @@ using System.Text.RegularExpressions;
 /// </summary>
 public static partial class ToolRouter
 {
-    public readonly record struct Plan(bool Wiki, bool Scholar, bool Web, string? Query = null, bool Explicit = false)
+    public readonly record struct Plan(bool Wiki, bool Scholar, bool Web, string? Query = null, bool Explicit = false, bool Folder = true, bool NewTopic = false)
     {
         public bool Any => Wiki || Scholar || Web;
 
@@ -40,15 +40,17 @@ public static partial class ToolRouter
 
     public static Plan ParseModelPlan(string? raw)
     {
+        // No parseable JSON means no classification happened; keep folder context on rather
+        // than silently dropping project background on a transient router miss.
         if (string.IsNullOrWhiteSpace(raw))
         {
-            return default;
+            return new Plan(Wiki: false, Scholar: false, Web: false, Folder: true);
         }
 
         var json = JsonObject().Match(raw);
         if (!json.Success)
         {
-            return default;
+            return new Plan(Wiki: false, Scholar: false, Web: false, Folder: true);
         }
 
         try
@@ -65,11 +67,13 @@ public static partial class ToolRouter
             }
 
             var query = ShortQuery(queryText);
-            return Cap(wiki, scholar, web) with { Query = query, Explicit = true };
+            var folder = FolderFlag(root);
+            var newTopic = Truthy(root, "newTopic");
+            return Cap(wiki, scholar, web) with { Query = query, Explicit = true, Folder = folder, NewTopic = newTopic };
         }
         catch (JsonException)
         {
-            return default;
+            return new Plan(Wiki: false, Scholar: false, Web: false, Folder: true);
         }
     }
 
@@ -80,21 +84,94 @@ public static partial class ToolRouter
         {
             Query = model.Query ?? hard.Query,
             Explicit = model.Explicit || hard.Explicit,
+            // Hard signals (URL/DOI/arXiv regex) have no opinion on folder relevance or topic
+            // drift; only the model's classification does.
+            Folder = model.Folder,
+            NewTopic = model.NewTopic,
         };
     }
 
     /// <summary>
     /// Attached files are the source material for this turn. Tools would spend the same
-    /// GGUF window the extract and the reply need, so they stay off.
+    /// GGUF window the extract and the reply need, so they stay off. Folder context is self-
+    /// contained background too, so it is skipped the same way (Plan.Folder defaults to false here).
     /// </summary>
-    public static Plan PlanForTurn(string prompt, Plan hard, Plan suggested, bool hasAttachments)
+    public static Plan PlanForTurn(string prompt, Plan hard, Plan suggested, bool hasAttachments, IReadOnlyList<ChatTurn>? recentTurns = null)
     {
         if (hasAttachments)
         {
             return default;
         }
 
-        return BindQuery(WithDefaultWeb(Merge(hard, suggested), prompt), prompt);
+        var plan = BindQuery(WithDefaultWeb(Merge(hard, suggested), prompt), prompt);
+        // Small local models reliably classify web/wiki/scholar but keep defaulting newTopic to
+        // false even on an obvious subject change. Back the model's own call with a deterministic
+        // one: no shared vocabulary at all with the recent conversation is a confident signal on
+        // its own, regardless of what the model said.
+        if (!plan.NewTopic && LooksLikeNewTopic(recentTurns ?? [], prompt))
+        {
+            plan = plan with { NewTopic = true };
+        }
+
+        return plan;
+    }
+
+    /// <summary>
+    /// True when <paramref name="prompt"/> shares no word of more than 3 letters with
+    /// <paramref name="recentTurns"/>. The length cutoff is a language-agnostic stand-in for a
+    /// stopword list (short words tend to be function words across languages); too few
+    /// significant words on either side means not enough signal to judge, so this returns false.
+    /// </summary>
+    public static bool LooksLikeNewTopic(IReadOnlyList<ChatTurn> recentTurns, string prompt)
+    {
+        if (recentTurns.Count == 0 || string.IsNullOrWhiteSpace(prompt))
+        {
+            return false;
+        }
+
+        var promptWords = SignificantWords(prompt);
+        if (promptWords.Count < 2)
+        {
+            return false;
+        }
+
+        var historyWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var turn in recentTurns)
+        {
+            foreach (var word in SignificantWords(turn.Content))
+            {
+                historyWords.Add(word);
+            }
+        }
+
+        if (historyWords.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var word in promptWords)
+        {
+            if (historyWords.Contains(word))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static List<string> SignificantWords(string text)
+    {
+        var words = new List<string>();
+        foreach (Match match in WordToken().Matches(text))
+        {
+            if (match.Value.Length > 3)
+            {
+                words.Add(match.Value);
+            }
+        }
+
+        return words;
     }
 
     /// <summary>
@@ -117,7 +194,7 @@ public static partial class ToolRouter
         }
 
         var lookup = LookupQuery(prompt);
-        return lookup is null ? plan : new Plan(Wiki: false, Scholar: false, Web: true, Query: lookup);
+        return lookup is null ? plan : new Plan(Wiki: false, Scholar: false, Web: true, Query: lookup, Folder: plan.Folder, NewTopic: plan.NewTopic);
     }
 
     /// <summary>
@@ -221,6 +298,19 @@ public static partial class ToolRouter
             || (value.ValueKind == JsonValueKind.String && value.GetString() is "true" or "1");
     }
 
+    // Unlike the tool flags, folder defaults to included: a missing or unreadable field should
+    // not silently drop project background the turn might need.
+    private static bool FolderFlag(JsonElement root)
+    {
+        if (!root.TryGetProperty("folder", out var value))
+        {
+            return true;
+        }
+
+        return value.ValueKind != JsonValueKind.False
+            && (value.ValueKind != JsonValueKind.String || value.GetString() is not ("false" or "0"));
+    }
+
     [GeneratedRegex(@"\barxiv\.org\b|\b\d{4}\.\d{4,5}(v\d+)?\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ArxivId();
 
@@ -235,4 +325,7 @@ public static partial class ToolRouter
 
     [GeneratedRegex(@"^[^\p{L}]*(\p{L}+)", RegexOptions.CultureInvariant)]
     private static partial Regex FirstWord();
+
+    [GeneratedRegex(@"\p{L}+", RegexOptions.CultureInvariant)]
+    private static partial Regex WordToken();
 }

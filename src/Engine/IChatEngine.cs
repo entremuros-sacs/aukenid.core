@@ -23,8 +23,10 @@ public interface IChatEngine
     Task<string?> TryGenerateTitleAsync(string prompt, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Language-agnostic tool plan for this user turn (web / wiki / scholar). Empty plan if the
-    /// engine cannot classify.
+    /// Language-agnostic tool plan for this user turn (web / wiki / scholar), plus whether this
+    /// turn needs this custom folder's sibling-thread background (<see cref="ToolRouter.Plan.Folder"/>,
+    /// defaults true) and whether it looks unrelated to <paramref name="recentTurns"/>
+    /// (<see cref="ToolRouter.Plan.NewTopic"/>, defaults false). Empty plan if the engine cannot classify.
     /// </summary>
-    Task<ToolRouter.Plan> SuggestToolsAsync(string prompt, CancellationToken cancellationToken);
+    Task<ToolRouter.Plan> SuggestToolsAsync(IReadOnlyList<ChatTurn> recentTurns, string prompt, CancellationToken cancellationToken);
 }

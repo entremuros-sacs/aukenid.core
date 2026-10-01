@@ -128,6 +128,164 @@ public sealed class DesktopFoundationTests
     }
 
     [Fact]
+    public void ConversationStore_MoveExchangeToNewThreadRelocatesTheTriggeringTurnOnly()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
+
+        var store = new ConversationStore(root);
+        var thread = store.CreateThread("Work", ConversationStore.GeneralFolder);
+        var firstUser = new MessageDto(Guid.CreateVersion7().ToString(), thread.Id, null, "user", "Tell me about the Jev AI model", DateTimeOffset.UtcNow);
+        store.SaveMessage(firstUser);
+        var firstReply = new MessageDto(Guid.CreateVersion7().ToString(), thread.Id, firstUser.Id, "Aukenid", "Jev is a GGUF model.", DateTimeOffset.UtcNow.AddSeconds(1));
+        store.SaveMessage(firstReply);
+        var secondUser = new MessageDto(Guid.CreateVersion7().ToString(), thread.Id, firstReply.Id, "user", "What does Azure offer for aggregation?", DateTimeOffset.UtcNow.AddSeconds(2));
+        store.SaveMessage(secondUser);
+        var secondReply = new MessageDto(Guid.CreateVersion7().ToString(), thread.Id, secondUser.Id, "Aukenid", "Azure offers Event Hubs.", DateTimeOffset.UtcNow.AddSeconds(3));
+        store.SaveMessage(secondReply);
+
+        var result = store.MoveExchangeToNewThread(thread.Id, secondUser.Id, "New conversation");
+
+        Assert.NotNull(result);
+        var (newThread, movedMessages) = result!.Value;
+        Assert.Equal(ConversationStore.GeneralFolder, newThread.FolderPath);
+        Assert.Equal(2, movedMessages.Count);
+
+        var remaining = store.ListMessages(thread.Id);
+        Assert.Equal(2, remaining.Count);
+        Assert.DoesNotContain(remaining, m => m.Id == secondUser.Id || m.Id == secondReply.Id);
+
+        var movedInNewThread = store.ListMessages(newThread.Id);
+        Assert.Equal(2, movedInNewThread.Count);
+        Assert.Contains(movedInNewThread, m => m.Id == secondUser.Id && m.ParentId == null);
+        Assert.Contains(movedInNewThread, m => m.Id == secondReply.Id && m.ParentId == secondUser.Id);
+
+        Directory.Delete(root, recursive: true);
+    }
+
+    [Fact]
+    public void ConversationStore_MoveExchangeToNewThreadRelocatesAttachmentFiles()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
+
+        var store = new ConversationStore(root);
+        var thread = store.CreateThread("Work", ConversationStore.GeneralFolder);
+        var sourceFile = Path.Combine(Path.GetTempPath(), $"aukenid-attach-{Guid.NewGuid():N}.txt");
+        File.WriteAllText(sourceFile, "contents");
+        var storedName = store.SaveAttachment(thread.Id, sourceFile)!;
+
+        var user = new MessageDto(Guid.CreateVersion7().ToString(), thread.Id, null, "user", "See attached", DateTimeOffset.UtcNow, [storedName]);
+        store.SaveMessage(user);
+
+        var result = store.MoveExchangeToNewThread(thread.Id, user.Id, "New conversation");
+
+        Assert.NotNull(result);
+        var newThread = result!.Value.Thread;
+        Assert.Null(store.TryGetAttachmentPath(thread.Id, storedName));
+        Assert.NotNull(store.TryGetAttachmentPath(newThread.Id, storedName));
+
+        File.Delete(sourceFile);
+        Directory.Delete(root, recursive: true);
+    }
+
+    [Fact]
+    public void ConversationStore_MoveExchangeToNewThreadWorksForTemporalThreads()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
+
+        var store = new ConversationStore(root);
+        var thread = store.CreateThread("Scratch", ConversationStore.TemporalFolder);
+        var user = new MessageDto(Guid.CreateVersion7().ToString(), thread.Id, null, "user", "Unrelated question", DateTimeOffset.UtcNow);
+        store.SaveMessage(user);
+
+        var result = store.MoveExchangeToNewThread(thread.Id, user.Id, "New conversation");
+
+        Assert.NotNull(result);
+        Assert.Equal(ConversationStore.TemporalFolder, result!.Value.Thread.FolderPath);
+        Assert.Empty(store.ListMessages(thread.Id));
+        Assert.Single(store.ListMessages(result.Value.Thread.Id));
+
+        Directory.Delete(root, recursive: true);
+    }
+
+    [Fact]
+    public void ConversationStore_MoveExchangeToNewThreadReturnsNullWhenMessageIsMissing()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
+
+        var store = new ConversationStore(root);
+        var thread = store.CreateThread("Work", ConversationStore.GeneralFolder);
+
+        Assert.Null(store.MoveExchangeToNewThread(thread.Id, "missing-id", "New conversation"));
+
+        Directory.Delete(root, recursive: true);
+    }
+
+    [Fact]
+    public void ConversationStore_SplitThreadWithHistoryCopiesThePrefixAndLeavesTheOriginalUntouched()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
+
+        var store = new ConversationStore(root);
+        var thread = store.CreateThread("Work", ConversationStore.GeneralFolder);
+        var root1 = new MessageDto(Guid.CreateVersion7().ToString(), thread.Id, null, "user", "First question", DateTimeOffset.UtcNow);
+        store.SaveMessage(root1);
+        var reply1 = new MessageDto(Guid.CreateVersion7().ToString(), thread.Id, root1.Id, "Aukenid", "First answer", DateTimeOffset.UtcNow.AddSeconds(1));
+        store.SaveMessage(reply1);
+        var root2 = new MessageDto(Guid.CreateVersion7().ToString(), thread.Id, reply1.Id, "user", "Second question", DateTimeOffset.UtcNow.AddSeconds(2));
+        store.SaveMessage(root2);
+
+        var result = store.SplitThread(thread.Id, reply1.Id, "Split", includeHistory: true, removeFromSource: false);
+
+        Assert.NotNull(result);
+        var (newThread, movedMessages) = result!.Value;
+        Assert.Equal(ConversationStore.GeneralFolder, newThread.FolderPath);
+        Assert.Equal(2, movedMessages.Count);
+        Assert.Equal(root1.Content, movedMessages[0].Content);
+        Assert.Null(movedMessages[0].ParentId);
+        Assert.Equal(reply1.Content, movedMessages[1].Content);
+        Assert.Equal(movedMessages[0].Id, movedMessages[1].ParentId);
+
+        // The original thread keeps everything, including the message split from (M).
+        Assert.Equal(3, store.ListMessages(thread.Id).Count);
+
+        Directory.Delete(root, recursive: true);
+    }
+
+    [Fact]
+    public void ConversationStore_SplitThreadWithoutHistoryMatchesMoveExchange()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
+
+        var store = new ConversationStore(root);
+        var thread = store.CreateThread("Work", ConversationStore.GeneralFolder);
+        var user = new MessageDto(Guid.CreateVersion7().ToString(), thread.Id, null, "user", "Unrelated question", DateTimeOffset.UtcNow);
+        store.SaveMessage(user);
+        var reply = new MessageDto(Guid.CreateVersion7().ToString(), thread.Id, user.Id, "Aukenid", "Unrelated answer", DateTimeOffset.UtcNow.AddSeconds(1));
+        store.SaveMessage(reply);
+
+        var result = store.SplitThread(thread.Id, user.Id, "New conversation", includeHistory: false, removeFromSource: true);
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result!.Value.Messages.Count);
+        Assert.Empty(store.ListMessages(thread.Id));
+
+        Directory.Delete(root, recursive: true);
+    }
+
+    [Fact]
+    public void ConversationStore_SplitThreadReturnsNullWhenMessageIsMissing()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
+
+        var store = new ConversationStore(root);
+        var thread = store.CreateThread("Work", ConversationStore.GeneralFolder);
+
+        Assert.Null(store.SplitThread(thread.Id, "missing-id", "Split", includeHistory: true, removeFromSource: false));
+
+        Directory.Delete(root, recursive: true);
+    }
+
+    [Fact]
     public void ConversationStore_RenameThreadUpdatesPersistedTitle()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");

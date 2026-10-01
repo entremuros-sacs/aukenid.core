@@ -3,6 +3,7 @@ namespace Aukenid.Core.Engine;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -176,33 +177,41 @@ public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
     // Asks the same local model for a short topic title instead of just truncating the raw prompt.
     // StatelessExecutor builds a fresh completion per call (no shared conversation state), but it's not
     // safe to run concurrently with the main response, so this must be awaited before that starts.
-    public Task<ToolRouter.Plan> SuggestToolsAsync(string prompt, CancellationToken cancellationToken)
+    public Task<ToolRouter.Plan> SuggestToolsAsync(IReadOnlyList<ChatTurn> recentTurns, string prompt, CancellationToken cancellationToken)
     {
         if (_executor is null)
         {
-            return Task.FromResult(default(ToolRouter.Plan));
+            return Task.FromResult(new ToolRouter.Plan(Wiki: false, Scholar: false, Web: false, Folder: true));
         }
 
         return Task.Run(async () =>
         {
             try
             {
+                // Recent history is folded into the single user turn as plain text, not as real
+                // chat turns: a realistic user/assistant exchange right above the instruction made
+                // the model continue the conversation instead of emitting strict JSON, which broke
+                // parsing (and silently dropped folder/newTopic to their fallback defaults).
                 var routePrompt = FormatTurns(
                 [
                     new ChatTurn("system", """
                         Route retrieval tools. Reply with JSON only, no markdown, no explanation:
-                        {"web":false,"wiki":false,"scholar":false,"q":""}
+                        {"web":false,"wiki":false,"scholar":false,"q":"","folder":true,"newTopic":false}
                         web=true for news, prices, products, versions, or when the user asks to look something up.
                         wiki=true for encyclopedia definitions of people, places, or established concepts.
                         scholar=true for scientific papers.
                         Questions about this assistant, its controls, or the current chat: all false.
                         At most two true. When one is true, q is a short search query of at most 8 words naming the outside subject. Do not copy the user's sentence into q.
+                        folder=false only if this question is simple and self-contained (a greeting, a direct edit, a one-off fact, a continuation of this same chat) and does not need background from other conversations in the current project. Otherwise folder=true.
+                        The user turn below may start with "Recent conversation:" followed by "Newest message:". newTopic=true only when the newest message has no connection at all to that recent conversation (a clear subject change, not a follow-up, clarification, or continuation). If there is no recent conversation shown, newTopic is always false.
                         """),
-                    new ChatTurn("user", prompt),
+                    new ChatTurn("user", BuildRouteUserTurn(recentTurns, prompt)),
                 ]);
                 var inferenceParams = new InferenceParams
                 {
-                    MaxTokens = 64,
+                    // The schema is 6 fields now (folder, newTopic added); too tight a budget lets
+                    // generation get cut off before the closing brace, which fails the whole parse.
+                    MaxTokens = 96,
                     SamplingPipeline = new DefaultSamplingPipeline { Temperature = 0.1f },
                 };
 
@@ -213,19 +222,38 @@ public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
                 }
 
                 var plan = ToolRouter.ParseModelPlan(raw);
-                if (plan.Any)
-                {
-                    HostLog.Line("tools", $"classifier web={plan.Web} wiki={plan.Wiki} scholar={plan.Scholar}");
-                }
+                HostLog.Line("tools", $"classifier web={plan.Web} wiki={plan.Wiki} scholar={plan.Scholar} folder={plan.Folder} newTopic={plan.NewTopic}");
 
                 return plan;
             }
             catch (Exception ex)
             {
                 HostLog.Line("tools", "classifier failed " + HostLog.Describe(ex));
-                return default;
+                return new ToolRouter.Plan(Wiki: false, Scholar: false, Web: false, Folder: true);
             }
         }, cancellationToken);
+    }
+
+    private static string BuildRouteUserTurn(IReadOnlyList<ChatTurn> recentTurns, string prompt)
+    {
+        if (recentTurns.Count == 0)
+        {
+            return prompt;
+        }
+
+        var lines = recentTurns.TakeLast(4).Select(turn =>
+        {
+            var role = turn.Role == "user" ? "User" : "Assistant";
+            return $"{role}: {CollapseAndCap(turn.Content, 300)}";
+        });
+
+        return "Recent conversation:\n" + string.Join('\n', lines) + "\n\nNewest message: " + prompt;
+    }
+
+    private static string CollapseAndCap(string text, int maxChars)
+    {
+        var collapsed = string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return collapsed.Length <= maxChars ? collapsed : collapsed[..maxChars] + "\u2026";
     }
 
     public Task<string?> TryGenerateTitleAsync(string prompt, CancellationToken cancellationToken)

@@ -191,6 +191,196 @@ public sealed class ConversationStore
     }
 
     /// <summary>
+    /// Moves a user message and its direct reply (if any) out of <paramref name="threadId"/> into a
+    /// brand-new thread in the same folder, instead of copying them (ADR-24): the topic-shift
+    /// suggestion relocates the triggering exchange so the original thread stops carrying an
+    /// unrelated turn. Returns null if the message is missing or is not a user message. A thin,
+    /// pre-validated wrapper over <see cref="SplitThread"/> (shared with manual Split, ADR-11).
+    /// </summary>
+    public (ThreadDto Thread, IReadOnlyList<MessageDto> Messages)? MoveExchangeToNewThread(
+        string threadId,
+        string userMessageId,
+        string provisionalTitle)
+    {
+        lock (_sync)
+        {
+            var userMessage = ListMessages(threadId).FirstOrDefault(m => m.Id == userMessageId);
+            if (userMessage is null || !string.Equals(userMessage.Role, "user", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            return SplitThread(threadId, userMessageId, provisionalTitle, includeHistory: false, removeFromSource: true);
+        }
+    }
+
+    /// <summary>
+    /// Shared primitive behind the topic-shift suggestion (ADR-24) and manual Split (ADR-11):
+    /// copies or moves messages from <paramref name="threadId"/> into a brand-new thread in the
+    /// same folder. With <paramref name="includeHistory"/> false, only <paramref name="leafMessageId"/>
+    /// and its direct reply (if any) move - the topic-shift case. With it true, the whole active
+    /// path from the root down to <paramref name="leafMessageId"/> is carried over - manual Split's
+    /// "sibling thread whose prefix is root to M". <paramref name="removeFromSource"/> controls
+    /// whether the source thread keeps those messages (Split leaves the original untouched) or not
+    /// (topic-shift relocates them). Returns null if <paramref name="leafMessageId"/> is missing.
+    /// </summary>
+    public (ThreadDto Thread, IReadOnlyList<MessageDto> Messages)? SplitThread(
+        string threadId,
+        string leafMessageId,
+        string title,
+        bool includeHistory,
+        bool removeFromSource)
+    {
+        lock (_sync)
+        {
+            var messages = ListMessages(threadId);
+            var leaf = messages.FirstOrDefault(m => m.Id == leafMessageId);
+            if (leaf is null)
+            {
+                return null;
+            }
+
+            var sourceThread = ListThreads().FirstOrDefault(t => t.Id == threadId);
+            if (sourceThread is null)
+            {
+                return null;
+            }
+
+            var toMove = includeHistory ? ResolveActivePath(messages, leafMessageId) : BuildExchange(messages, leaf);
+            if (toMove.Count == 0)
+            {
+                return null;
+            }
+
+            var newThread = CreateThread(title, sourceThread.FolderPath);
+
+            // Relocate (move) or duplicate (copy) attachment files along with their message.
+            var attachmentNames = toMove.SelectMany(m => m.Attachments ?? (IReadOnlyList<string>)[]).ToList();
+            if (attachmentNames.Count > 0)
+            {
+                var sourceDir = PeekAttachmentsDirectory(threadId);
+                var destDir = GetOrCreateAttachmentsDirectory(newThread.Id);
+                if (sourceDir is not null && destDir is not null)
+                {
+                    foreach (var name in attachmentNames)
+                    {
+                        var sourcePath = Path.Combine(sourceDir, name);
+                        if (!File.Exists(sourcePath))
+                        {
+                            continue;
+                        }
+
+                        var destPath = Path.Combine(destDir, name);
+                        if (removeFromSource)
+                        {
+                            File.Move(sourcePath, destPath, overwrite: true);
+                        }
+                        else
+                        {
+                            File.Copy(sourcePath, destPath, overwrite: true);
+                        }
+                    }
+                }
+            }
+
+            var movedMessages = new List<MessageDto>(toMove.Count);
+            string? previousId = null;
+            foreach (var message in toMove)
+            {
+                var moved = message with { ThreadId = newThread.Id, ParentId = previousId };
+                SaveMessage(moved);
+                movedMessages.Add(moved);
+                previousId = moved.Id;
+            }
+
+            if (removeFromSource)
+            {
+                RemoveMessagesFromThread(threadId, toMove.Select(m => m.Id).ToHashSet(StringComparer.Ordinal));
+            }
+
+            return (newThread with { HasMessages = true }, movedMessages);
+        }
+    }
+
+    // The topic-shift exchange is just the trigger plus its direct reply, not the whole prefix.
+    private static IReadOnlyList<MessageDto> BuildExchange(IReadOnlyList<MessageDto> messages, MessageDto trigger)
+    {
+        var reply = messages.FirstOrDefault(m => m.ParentId == trigger.Id);
+        return reply is null ? [trigger] : [trigger, reply];
+    }
+
+    // Mirrors Engine.ActivePath.Resolve without taking a Data-layer dependency on the Engine project.
+    private static List<MessageDto> ResolveActivePath(IReadOnlyList<MessageDto> messages, string leafId)
+    {
+        var byId = new Dictionary<string, MessageDto>(messages.Count);
+        foreach (var message in messages)
+        {
+            byId[message.Id] = message;
+        }
+
+        if (!byId.TryGetValue(leafId, out var leaf))
+        {
+            return [];
+        }
+
+        var hasLinks = messages.Any(m => m.ParentId is not null && byId.ContainsKey(m.ParentId));
+        if (!hasLinks)
+        {
+            var prefix = new List<MessageDto>(messages.Count);
+            foreach (var message in messages)
+            {
+                prefix.Add(message);
+                if (message.Id == leafId)
+                {
+                    break;
+                }
+            }
+
+            return prefix;
+        }
+
+        var path = new List<MessageDto>();
+        var seen = new HashSet<string>();
+        MessageDto? current = leaf;
+        while (current is not null && seen.Add(current.Id))
+        {
+            path.Add(current);
+            current = current.ParentId is not null && byId.TryGetValue(current.ParentId, out var parent) ? parent : null;
+        }
+
+        path.Reverse();
+        return path;
+    }
+
+    private void RemoveMessagesFromThread(string threadId, HashSet<string> idsToRemove)
+    {
+        lock (_sync)
+        {
+            if (_temporal.TryGetValue(threadId, out var entry))
+            {
+                entry.Messages.RemoveAll(m => idsToRemove.Contains(m.Id));
+                return;
+            }
+
+            if (!_threadFiles.TryGetValue(threadId, out var filePath))
+            {
+                return;
+            }
+
+            var folderPath = ToRelativePath(Path.GetDirectoryName(Path.GetDirectoryName(filePath)!)!);
+            var thread = ConversationMarkdown.ReadThread(filePath, folderPath);
+            if (thread is null)
+            {
+                return;
+            }
+
+            var remaining = ConversationMarkdown.ReadMessages(filePath, threadId).Where(m => !idsToRemove.Contains(m.Id));
+            var rewritten = ConversationMarkdown.BuildHeader(thread) + string.Concat(remaining.Select(ConversationMarkdown.FormatMessageBlock));
+            File.WriteAllText(filePath, rewritten);
+        }
+    }
+
+    /// <summary>
     /// One-lock snapshot of every persisted and in-memory conversation, for full-text search.
     /// </summary>
     internal IReadOnlyList<(ThreadDto Thread, IReadOnlyList<MessageDto> Messages)> ListConversations()

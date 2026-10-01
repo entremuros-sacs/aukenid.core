@@ -39,11 +39,12 @@ public sealed class GroundedChat
         string userText,
         CancellationToken cancellationToken)
     {
+        var history = conversation.ToList();
         conversation.Add(new ChatTurn("user", userText));
 
         var hard = ToolRouter.HardSignals(userText);
-        var suggested = await engine.SuggestToolsAsync(userText, cancellationToken);
-        var plan = ToolRouter.PlanForTurn(userText, hard, suggested, hasAttachments: false);
+        var suggested = await engine.SuggestToolsAsync(history, userText, cancellationToken);
+        var plan = ToolRouter.PlanForTurn(userText, hard, suggested, hasAttachments: false, history);
         if (plan.Any)
         {
             HostLog.Line("tools", $"web={plan.Web} wiki={plan.Wiki} scholar={plan.Scholar}");

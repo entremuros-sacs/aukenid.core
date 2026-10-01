@@ -127,6 +127,47 @@ public sealed class FolderContextTests
         Assert.DoesNotContain("discarded-branch", text);
     }
 
+    [Fact]
+    public void IsHeavy_FalseForGeneralAndTemporalRegardlessOfSiblingCount()
+    {
+        var siblings = Enumerable.Range(0, 10)
+            .Select(i => Thread($"s{i}", ConversationStore.GeneralFolder, $"Chat {i}"))
+            .ToList();
+
+        Assert.False(FolderContext.IsHeavy(ConversationStore.GeneralFolder, "current", siblings));
+    }
+
+    [Fact]
+    public void IsHeavy_FalseAtOrBelowTheCheapThreshold()
+    {
+        var siblings = Enumerable.Range(0, FolderContext.CheapSiblingThreshold)
+            .Select(i => Thread($"s{i}", "Work", $"Chat {i}"))
+            .ToList();
+
+        Assert.False(FolderContext.IsHeavy("Work", "current", siblings));
+    }
+
+    [Fact]
+    public void IsHeavy_TrueOncePastTheCheapThreshold()
+    {
+        var siblings = Enumerable.Range(0, FolderContext.CheapSiblingThreshold + 1)
+            .Select(i => Thread($"s{i}", "Work", $"Chat {i}"))
+            .ToList();
+
+        Assert.True(FolderContext.IsHeavy("Work", "current", siblings));
+    }
+
+    [Fact]
+    public void IsHeavy_IgnoresEmptySiblingsAndTheCurrentThread()
+    {
+        var siblings = Enumerable.Range(0, FolderContext.CheapSiblingThreshold + 5)
+            .Select(i => Thread($"s{i}", "Work", $"Chat {i}") with { HasMessages = false })
+            .Append(Thread("current", "Work", "Current"))
+            .ToList();
+
+        Assert.False(FolderContext.IsHeavy("Work", "current", siblings));
+    }
+
     private static ThreadDto Thread(string id, string folder, string title) =>
         new(id, title, folder, DateTimeOffset.UnixEpoch, HasMessages: true);
 

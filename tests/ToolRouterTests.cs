@@ -127,4 +127,145 @@ public sealed class ToolRouterTests
         Assert.False(ToolRouter.ParseModelPlan(null).Any);
         Assert.False(ToolRouter.ParseModelPlan("no tools").Any);
     }
+
+    [Fact]
+    public void ParseModelPlan_DefaultsFolderToTrueWhenFieldIsMissing()
+    {
+        var plan = ToolRouter.ParseModelPlan("""{"web":false,"wiki":false,"scholar":false}""");
+        Assert.True(plan.Folder);
+    }
+
+    [Fact]
+    public void ParseModelPlan_ReadsAnExplicitFolderFalse()
+    {
+        var plan = ToolRouter.ParseModelPlan("""{"web":false,"wiki":false,"scholar":false,"folder":false}""");
+        Assert.False(plan.Folder);
+    }
+
+    [Fact]
+    public void ParseModelPlan_DefaultsFolderToTrueOnUnparseableJson()
+    {
+        Assert.True(ToolRouter.ParseModelPlan(null).Folder);
+        Assert.True(ToolRouter.ParseModelPlan("no tools").Folder);
+    }
+
+    [Fact]
+    public void Merge_CarriesTheModelsFolderDecisionNotTheHardSignalDefault()
+    {
+        var hard = new ToolRouter.Plan(Wiki: false, Scholar: false, Web: false);
+        var model = ToolRouter.ParseModelPlan("""{"web":false,"wiki":false,"scholar":false,"folder":false}""");
+        var merged = ToolRouter.Merge(hard, model);
+        Assert.False(merged.Folder);
+    }
+
+    [Fact]
+    public void PlanForTurn_DropsFolderContextWhenTheTurnHasAttachments()
+    {
+        var hard = new ToolRouter.Plan(Wiki: false, Scholar: false, Web: false);
+        var suggested = ToolRouter.ParseModelPlan("""{"web":false,"wiki":false,"scholar":false,"folder":true}""");
+        var plan = ToolRouter.PlanForTurn("Summarize the attached file", hard, suggested, hasAttachments: true);
+        Assert.False(plan.Folder);
+    }
+
+    [Fact]
+    public void PlanForTurn_KeepsTheModelsFolderFalseThroughDefaultWebAndBindQuery()
+    {
+        var hard = new ToolRouter.Plan(Wiki: false, Scholar: false, Web: false);
+        var suggested = ToolRouter.ParseModelPlan("""{"web":false,"wiki":false,"scholar":false,"folder":false}""");
+        var plan = ToolRouter.PlanForTurn("Dame una lista de variantes de modelos AI Gemma", hard, suggested, hasAttachments: false);
+        Assert.False(plan.Folder);
+    }
+
+    [Fact]
+    public void WithDefaultWeb_PreservesFolderWhenFallingBackToTheNamedLookup()
+    {
+        // Explicit=false + Any=false is what hits WithDefaultWeb's named-lookup fallback branch.
+        var plan = new ToolRouter.Plan(Wiki: false, Scholar: false, Web: false, Folder: false);
+        var result = ToolRouter.WithDefaultWeb(plan, "Dame una lista de variantes de modelos AI Gemma");
+        Assert.True(result.Web);
+        Assert.False(result.Folder);
+    }
+
+    [Fact]
+    public void ParseModelPlan_DefaultsNewTopicToFalseWhenFieldIsMissing()
+    {
+        var plan = ToolRouter.ParseModelPlan("""{"web":false,"wiki":false,"scholar":false}""");
+        Assert.False(plan.NewTopic);
+    }
+
+    [Fact]
+    public void ParseModelPlan_ReadsAnExplicitNewTopicTrue()
+    {
+        var plan = ToolRouter.ParseModelPlan("""{"web":false,"wiki":false,"scholar":false,"newTopic":true}""");
+        Assert.True(plan.NewTopic);
+    }
+
+    [Fact]
+    public void ParseModelPlan_DefaultsNewTopicToFalseOnUnparseableJson()
+    {
+        Assert.False(ToolRouter.ParseModelPlan(null).NewTopic);
+        Assert.False(ToolRouter.ParseModelPlan("no tools").NewTopic);
+    }
+
+    [Fact]
+    public void Merge_CarriesTheModelsNewTopicDecision()
+    {
+        var hard = new ToolRouter.Plan(Wiki: false, Scholar: false, Web: false);
+        var model = ToolRouter.ParseModelPlan("""{"web":false,"wiki":false,"scholar":false,"newTopic":true}""");
+        var merged = ToolRouter.Merge(hard, model);
+        Assert.True(merged.NewTopic);
+    }
+
+    [Fact]
+    public void PlanForTurn_DropsNewTopicSuggestionWhenTheTurnHasAttachments()
+    {
+        var hard = new ToolRouter.Plan(Wiki: false, Scholar: false, Web: false);
+        var suggested = ToolRouter.ParseModelPlan("""{"web":false,"wiki":false,"scholar":false,"newTopic":true}""");
+        var plan = ToolRouter.PlanForTurn("Summarize the attached file", hard, suggested, hasAttachments: true);
+        Assert.False(plan.NewTopic);
+    }
+
+    [Fact]
+    public void LooksLikeNewTopic_TrueWhenNoWordsAreShared()
+    {
+        var history = new[] { new ChatTurn("user", "Tell me something about the Jev AI model") };
+        var result = ToolRouter.LooksLikeNewTopic(history, "What services does Azure offer for a cloud aggregation service");
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void LooksLikeNewTopic_FalseWhenWordsOverlap()
+    {
+        var history = new[] { new ChatTurn("user", "Tell me something about the Jev AI model") };
+        var result = ToolRouter.LooksLikeNewTopic(history, "What else can you tell me about that Jev model");
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void LooksLikeNewTopic_FalseWithNoHistory()
+    {
+        Assert.False(ToolRouter.LooksLikeNewTopic([], "What services does Azure offer for a cloud aggregation service"));
+    }
+
+    [Fact]
+    public void LooksLikeNewTopic_FalseWhenThePromptHasTooFewSignificantWords()
+    {
+        var history = new[] { new ChatTurn("user", "Tell me something about the Jev AI model") };
+        Assert.False(ToolRouter.LooksLikeNewTopic(history, "Thanks a lot"));
+    }
+
+    [Fact]
+    public void PlanForTurn_SetsNewTopicFromTheWordOverlapBackstopWhenTheModelMissesIt()
+    {
+        var hard = new ToolRouter.Plan(Wiki: false, Scholar: false, Web: false);
+        var suggested = ToolRouter.ParseModelPlan("""{"web":true,"wiki":false,"scholar":false,"newTopic":false}""");
+        var history = new[] { new ChatTurn("user", "Tell me something about the Jev AI model") };
+        var plan = ToolRouter.PlanForTurn(
+            "What services does Azure offer for a cloud aggregation service",
+            hard,
+            suggested,
+            hasAttachments: false,
+            history);
+        Assert.True(plan.NewTopic);
+    }
 }
