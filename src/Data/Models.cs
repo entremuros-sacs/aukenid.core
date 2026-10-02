@@ -23,3 +23,8 @@ public sealed record MessageDto(
     string Content,
     DateTimeOffset Created,
     IReadOnlyList<string>? Attachments = null);
+
+public sealed record DocumentVersionDto(
+    string Id,
+    string Label,
+    DateTimeOffset Created);

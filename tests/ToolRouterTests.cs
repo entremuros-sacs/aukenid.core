@@ -60,6 +60,17 @@ public sealed class ToolRouterTests
     }
 
     [Fact]
+    public void PlanForTurn_WithAttachments_StillRoutesDocumentButSkipsFolder()
+    {
+        var hard = default(ToolRouter.Plan);
+        var suggested = new ToolRouter.Plan(Wiki: false, Scholar: false, Web: false, Document: true);
+        var plan = ToolRouter.PlanForTurn("put this file in the document panel", hard, suggested, hasAttachments: true);
+        Assert.True(plan.Document);
+        Assert.False(plan.Any);
+        Assert.False(plan.Folder);
+    }
+
+    [Fact]
     public void PlanForTurn_StillRoutesWhenThereAreNoAttachments()
     {
         var empty = default(ToolRouter.Plan);
@@ -86,6 +97,41 @@ public sealed class ToolRouterTests
         var plan = ToolRouter.PlanForTurn(asked, empty, empty, hasAttachments: false);
         Assert.False(plan.Web);
         Assert.Null(plan.Query);
+    }
+
+    [Fact]
+    public void ParseModelPlan_ReadsDocumentFlag()
+    {
+        var plan = ToolRouter.ParseModelPlan("{\"web\":false,\"wiki\":false,\"scholar\":false,\"document\":true}");
+        Assert.True(plan.Document);
+        Assert.False(plan.Any);
+    }
+
+    [Fact]
+    public void Merge_PreservesDocumentFromEitherSide()
+    {
+        var hard = new ToolRouter.Plan(Wiki: false, Scholar: false, Web: false);
+        var model = new ToolRouter.Plan(Wiki: false, Scholar: false, Web: false, Document: true);
+        var plan = ToolRouter.Merge(hard, model);
+        Assert.True(plan.Document);
+    }
+
+    [Fact]
+    public void WithDefaultWeb_PreservesDocumentWhenFallingBackToWebLookup()
+    {
+        var withDocument = new ToolRouter.Plan(Wiki: false, Scholar: false, Web: false, Document: true, Explicit: true);
+        var result = ToolRouter.WithDefaultWeb(withDocument, "Dame una lista de variantes de modelos AI Gemma");
+        Assert.True(result.Document);
+    }
+
+    [Fact]
+    public void PlanForTurn_DocumentSurvivesTheFullPipeline()
+    {
+        var hard = default(ToolRouter.Plan);
+        var suggested = new ToolRouter.Plan(Wiki: false, Scholar: false, Web: false, Document: true, Explicit: true);
+        var plan = ToolRouter.PlanForTurn("agrega ese contenido al panel de edición", hard, suggested, hasAttachments: false);
+        Assert.True(plan.Document);
+        Assert.False(plan.Any);
     }
 
     [Fact]

@@ -39,6 +39,30 @@ public sealed class ActivePathTests
     }
 
     [Fact]
+    public void ToTurns_StripsUiNoticeMarkerFromStoredContent()
+    {
+        var root = Msg("u1", null, "user", "Escribe una receta");
+        var a1 = Msg("a1", "u1", "Aukenid", "%%auk:document.updated%%\n\nReceta de ají de gallina...");
+        var u2 = Msg("u2", "a1", "user", "Hazla más picante");
+
+        var turns = ActivePath.ToTurns([root, a1, u2], "u2");
+
+        Assert.Equal("Receta de ají de gallina...", turns[1].Content);
+    }
+
+    [Fact]
+    public void ToTurns_StripsBareNoticeMarkerDownToEmptyContent()
+    {
+        var root = Msg("u1", null, "user", "Escribe una receta");
+        var a1 = Msg("a1", "u1", "Aukenid", "%%auk:document.updated%%");
+        var u2 = Msg("u2", "a1", "user", "Hazla más picante");
+
+        var turns = ActivePath.ToTurns([root, a1, u2], "u2");
+
+        Assert.Equal(string.Empty, turns[1].Content);
+    }
+
+    [Fact]
     public void Resolve_WithoutParentLinks_UsesChronologicalPrefixThroughLeaf()
     {
         var u1 = Msg("u1", null, "user", "uno");

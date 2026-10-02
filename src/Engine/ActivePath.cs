@@ -2,6 +2,7 @@ namespace Aukenid.Core.Engine;
 
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using Aukenid.Core.Contracts;
 
 public readonly record struct ChatTurn(string Role, string Content);
@@ -13,16 +14,27 @@ public readonly record struct ChatTurn(string Role, string Content);
 /// </summary>
 public static class ActivePath
 {
+    // A stored assistant message may start with a host notice marker (%%auk:key%%, e.g. after a tool
+    // warning or a document-panel update) meant for the UI only - the model must never see this raw
+    // syntax in its own prior turn, or it can echo/hallucinate around it in a later reply.
+    private static readonly Regex NoticeMarker = new(@"^%%auk:[a-z.-]+%%\n*", RegexOptions.Compiled);
+
     public static IReadOnlyList<ChatTurn> ToTurns(IReadOnlyList<MessageDto> messages, string leafId)
     {
         var path = Resolve(messages, leafId);
         var turns = new ChatTurn[path.Count];
         for (var i = 0; i < path.Count; i++)
         {
-            turns[i] = new ChatTurn(NormalizeRole(path[i].Role), path[i].Content);
+            turns[i] = new ChatTurn(NormalizeRole(path[i].Role), StripNoticeMarker(path[i].Content));
         }
 
         return turns;
+    }
+
+    private static string StripNoticeMarker(string content)
+    {
+        var match = NoticeMarker.Match(content);
+        return match.Success ? content[match.Length..] : content;
     }
 
     public static IReadOnlyList<MessageDto> Resolve(IReadOnlyList<MessageDto> messages, string leafId)

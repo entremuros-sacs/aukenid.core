@@ -21,6 +21,8 @@ public sealed class ConversationStore
     public const string TemporalFolder = "Temporal";
     private const string ThreadFileName = "conversation.md";
     private const string AttachmentsDirectoryName = "attachments";
+    private const string DocumentFileName = "document.md";
+    private const string DocumentVersionsDirectoryName = "document-versions";
 
     private readonly string _root;
     private readonly Lock _sync = new();
@@ -905,6 +907,154 @@ public sealed class ConversationStore
                 ? Path.GetFileName(Path.GetDirectoryName(filePath))
                 : null;
         }
+    }
+
+    /// <summary>Markdown content of this thread's document, or null if none exists yet or the thread is unknown.</summary>
+    public string? ReadDocument(string threadId)
+    {
+        lock (_sync)
+        {
+            var dir = GetThreadDirectory(threadId);
+            if (dir is null)
+            {
+                return null;
+            }
+
+            var path = Path.Combine(dir, DocumentFileName);
+            return File.Exists(path) ? File.ReadAllText(path) : null;
+        }
+    }
+
+    /// <summary>Writes the document's markdown content next to the thread's conversation file. Returns false if the thread is unknown.</summary>
+    public bool SaveDocument(string threadId, string content)
+    {
+        lock (_sync)
+        {
+            var dir = GetThreadDirectory(threadId);
+            if (dir is null)
+            {
+                return false;
+            }
+
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, DocumentFileName), content);
+            return true;
+        }
+    }
+
+    /// <summary>Snapshots the current document into its version history (e.g. before/after an assisted edit). Returns null if there is no document yet.</summary>
+    public DocumentVersionDto? SnapshotDocumentVersion(string threadId, string label)
+    {
+        lock (_sync)
+        {
+            var dir = GetThreadDirectory(threadId);
+            return dir is null ? null : SnapshotDocumentVersionCore(dir, label);
+        }
+    }
+
+    /// <summary>Version history for this thread's document, newest first.</summary>
+    public IReadOnlyList<DocumentVersionDto> ListDocumentVersions(string threadId)
+    {
+        lock (_sync)
+        {
+            var dir = GetThreadDirectory(threadId);
+            var versionsDir = dir is null ? null : Path.Combine(dir, DocumentVersionsDirectoryName);
+            if (versionsDir is null || !Directory.Exists(versionsDir))
+            {
+                return [];
+            }
+
+            var versions = new List<DocumentVersionDto>();
+            foreach (var file in Directory.EnumerateFiles(versionsDir, "*.md"))
+            {
+                var parsed = DocumentMarkdown.ReadVersion(file);
+                if (parsed is not null)
+                {
+                    versions.Add(new DocumentVersionDto(parsed.Value.Id, parsed.Value.Label, parsed.Value.Created));
+                }
+            }
+
+            versions.Sort((a, b) => b.Created.CompareTo(a.Created));
+            return versions;
+        }
+    }
+
+    /// <summary>Reads a past version's content without restoring it, or null if the id is unknown.</summary>
+    public string? ReadDocumentVersion(string threadId, string versionId)
+    {
+        lock (_sync)
+        {
+            var versionPath = ResolveVersionPath(threadId, versionId);
+            return versionPath is null ? null : DocumentMarkdown.ReadVersion(versionPath)?.Content;
+        }
+    }
+
+    /// <summary>Restores a prior version as the current document, after snapshotting the current content so the restore itself is undoable.</summary>
+    public bool RestoreDocumentVersion(string threadId, string versionId)
+    {
+        lock (_sync)
+        {
+            var versionPath = ResolveVersionPath(threadId, versionId);
+            var parsed = versionPath is null ? null : DocumentMarkdown.ReadVersion(versionPath);
+            if (parsed is null)
+            {
+                return false;
+            }
+
+            var dir = GetThreadDirectory(threadId)!;
+            SnapshotDocumentVersionCore(dir, "before-restore");
+            File.WriteAllText(Path.Combine(dir, DocumentFileName), parsed.Value.Content);
+            return true;
+        }
+    }
+
+    private DocumentVersionDto? SnapshotDocumentVersionCore(string dir, string label)
+    {
+        var docPath = Path.Combine(dir, DocumentFileName);
+        if (!File.Exists(docPath))
+        {
+            return null;
+        }
+
+        var versionsDir = Path.Combine(dir, DocumentVersionsDirectoryName);
+        Directory.CreateDirectory(versionsDir);
+
+        var id = Guid.CreateVersion7().ToString();
+        var created = DateTimeOffset.UtcNow;
+        var content = File.ReadAllText(docPath);
+        File.WriteAllText(Path.Combine(versionsDir, id + ".md"), DocumentMarkdown.BuildVersionFile(id, label, created, content));
+        return new DocumentVersionDto(id, label, created);
+    }
+
+    // Guards against a version id that escapes the versions directory (path traversal), same check as TryGetAttachmentPath.
+    private string? ResolveVersionPath(string threadId, string versionId)
+    {
+        if (string.IsNullOrWhiteSpace(versionId) || versionId != Path.GetFileName(versionId))
+        {
+            return null;
+        }
+
+        var dir = GetThreadDirectory(threadId);
+        if (dir is null)
+        {
+            return null;
+        }
+
+        var versionPath = Path.Combine(dir, DocumentVersionsDirectoryName, versionId + ".md");
+        return File.Exists(versionPath) ? versionPath : null;
+    }
+
+    /// <summary>This thread's own directory (conversation.md's folder, or a temp folder for a Temporal thread), or null if unknown.</summary>
+    private string? GetThreadDirectory(string threadId)
+    {
+        if (_threadFiles.TryGetValue(threadId, out var filePath))
+        {
+            return Path.GetDirectoryName(filePath);
+        }
+
+        return _temporal.ContainsKey(threadId)
+            ? Path.Combine(Path.GetTempPath(), "Aukenid", "temporal", threadId)
+            : null;
     }
 
     public static bool IsCustomFolder(string folderPath) =>

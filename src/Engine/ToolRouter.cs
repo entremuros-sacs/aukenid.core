@@ -11,7 +11,9 @@ using System.Text.RegularExpressions;
 /// </summary>
 public static partial class ToolRouter
 {
-    public readonly record struct Plan(bool Wiki, bool Scholar, bool Web, string? Query = null, bool Explicit = false, bool Folder = true, bool NewTopic = false)
+    // Document is a separate axis from the retrieval tools (it names a write destination, not a
+    // source), so it is never counted toward Any or the web/wiki/scholar cap in Cap().
+    public readonly record struct Plan(bool Wiki, bool Scholar, bool Web, string? Query = null, bool Explicit = false, bool Folder = true, bool NewTopic = false, bool Document = false)
     {
         public bool Any => Wiki || Scholar || Web;
 
@@ -60,6 +62,7 @@ public static partial class ToolRouter
             var wiki = Truthy(root, "wiki");
             var scholar = Truthy(root, "scholar");
             var web = Truthy(root, "web");
+            var documentFlag = Truthy(root, "document");
             string? queryText = null;
             if (root.TryGetProperty("q", out var q) && q.ValueKind == JsonValueKind.String)
             {
@@ -69,7 +72,7 @@ public static partial class ToolRouter
             var query = ShortQuery(queryText);
             var folder = FolderFlag(root);
             var newTopic = Truthy(root, "newTopic");
-            return Cap(wiki, scholar, web) with { Query = query, Explicit = true, Folder = folder, NewTopic = newTopic };
+            return Cap(wiki, scholar, web) with { Query = query, Explicit = true, Folder = folder, NewTopic = newTopic, Document = documentFlag };
         }
         catch (JsonException)
         {
@@ -88,19 +91,22 @@ public static partial class ToolRouter
             // drift; only the model's classification does.
             Folder = model.Folder,
             NewTopic = model.NewTopic,
+            Document = hard.Document || model.Document,
         };
     }
 
     /// <summary>
     /// Attached files are the source material for this turn. Tools would spend the same
     /// GGUF window the extract and the reply need, so they stay off. Folder context is self-
-    /// contained background too, so it is skipped the same way (Plan.Folder defaults to false here).
+    /// contained background too, so it is skipped the same way. A document-write instruction is
+    /// still honored, though: the user may be asking to dump the attachment straight into the
+    /// document panel, which is exactly what Document exists to route.
     /// </summary>
     public static Plan PlanForTurn(string prompt, Plan hard, Plan suggested, bool hasAttachments, IReadOnlyList<ChatTurn>? recentTurns = null)
     {
         if (hasAttachments)
         {
-            return default;
+            return new Plan(Wiki: false, Scholar: false, Web: false, Folder: false, Document: hard.Document || suggested.Document);
         }
 
         var plan = BindQuery(WithDefaultWeb(Merge(hard, suggested), prompt), prompt);
@@ -194,7 +200,7 @@ public static partial class ToolRouter
         }
 
         var lookup = LookupQuery(prompt);
-        return lookup is null ? plan : new Plan(Wiki: false, Scholar: false, Web: true, Query: lookup, Folder: plan.Folder, NewTopic: plan.NewTopic);
+        return lookup is null ? plan : new Plan(Wiki: false, Scholar: false, Web: true, Query: lookup, Folder: plan.Folder, NewTopic: plan.NewTopic, Document: plan.Document);
     }
 
     /// <summary>
