@@ -4,7 +4,7 @@ using System.IO;
 using System.Text.Json;
 using System.Threading;
 
-/// <summary>Remembers which sidebar folder was last expanded across app launches.</summary>
+/// <summary>Remembers which sidebar folder was last expanded, and which model was last active, across app launches.</summary>
 public sealed class UiStateStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
@@ -13,6 +13,8 @@ public sealed class UiStateStore
     private readonly Lock _sync = new();
 
     public string SelectedFolder { get; private set; } = ConversationStore.GeneralFolder;
+
+    public string? SelectedModelId { get; private set; }
 
     public UiStateStore(string path)
     {
@@ -26,14 +28,30 @@ public sealed class UiStateStore
         lock (_sync)
         {
             SelectedFolder = value;
-            var dir = Path.GetDirectoryName(_path);
-            if (!string.IsNullOrEmpty(dir))
-            {
-                Directory.CreateDirectory(dir);
-            }
-
-            File.WriteAllText(_path, JsonSerializer.Serialize(new FileModel(SelectedFolder), JsonOptions));
+            Persist();
         }
+    }
+
+    // Without this, the gallery's "first .gguf alphabetically" startup pick would silently
+    // override whichever model the user had actually switched to in a prior session.
+    public void SetSelectedModel(string? modelId)
+    {
+        lock (_sync)
+        {
+            SelectedModelId = string.IsNullOrWhiteSpace(modelId) ? null : modelId;
+            Persist();
+        }
+    }
+
+    private void Persist()
+    {
+        var dir = Path.GetDirectoryName(_path);
+        if (!string.IsNullOrEmpty(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        File.WriteAllText(_path, JsonSerializer.Serialize(new FileModel(SelectedFolder, SelectedModelId), JsonOptions));
     }
 
     private void Load()
@@ -52,13 +70,15 @@ public sealed class UiStateStore
                 {
                     SelectedFolder = parsed.SelectedFolder;
                 }
+
+                SelectedModelId = parsed?.SelectedModelId;
             }
             catch (JsonException)
             {
-                // Keep the default folder if the file is unreadable.
+                // Keep the defaults if the file is unreadable.
             }
         }
     }
 
-    private sealed record FileModel(string SelectedFolder);
+    private sealed record FileModel(string SelectedFolder, string? SelectedModelId = null);
 }

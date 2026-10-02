@@ -67,11 +67,8 @@ public sealed class SemanticScholarProvider : IScholarProvider
 
         await EnrichOpenAccessAsync(papers, cancellationToken);
 
-        if (papers.Count == 0)
-        {
-            throw new InvalidOperationException("Scholar search returned no papers.");
-        }
-
+        // No matching paper is a normal, non-exceptional search outcome, not a failure -
+        // ScholarContext.TryTurn already treats an empty list as "nothing to add", no notice shown.
         return papers;
     }
 

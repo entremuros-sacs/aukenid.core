@@ -42,16 +42,17 @@ public sealed partial class WikipediaProvider : IWikiProvider
         var (api, hits) = await SearchWikiAsync(EnApi, query.Text, limit, cancellationToken);
         if (hits.Count == 0)
         {
-            throw new InvalidOperationException("Wikipedia returned no articles.");
+            // No matching article is a normal, non-exceptional search outcome, not a failure -
+            // WikiContext.TryTurn already treats an empty list as "nothing to add", no notice shown.
+            return [];
         }
 
         var articles = await LoadExtractsAsync(api, hits, cancellationToken);
-        if (articles.Count == 0)
+        if (articles.Count > 0)
         {
-            throw new InvalidOperationException("Wikipedia returned no articles.");
+            await EnrichWikidataAsync(articles, cancellationToken);
         }
 
-        await EnrichWikidataAsync(articles, cancellationToken);
         return articles;
     }
 

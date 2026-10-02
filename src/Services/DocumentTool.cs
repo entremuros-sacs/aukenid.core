@@ -71,9 +71,11 @@ public sealed class DocumentTool
                 the latest instruction instead of starting over, unless asked to replace it entirely. If a
                 source file is attached, use it as material and perform the full requested transformation
                 (translate, rewrite, summarize, reorganize, fill in a template, etc.) rather than copying
-                it unchanged, unless a verbatim copy was explicitly asked for. Output ONLY the final
-                Markdown for the document - no greeting, no description of what you are doing, no closing
-                question or summary.
+                it unchanged, unless a verbatim copy was explicitly asked for. If the content involves
+                code, include the explanation alongside it (comments in the code, surrounding prose, or
+                both) instead of only the bare code - that explanation belongs in the document too, not
+                just in chat. Output ONLY the document's own content - no greeting, no meta-narration
+                about what you are doing, no closing question or summary addressed to the user.
                 """),
         };
 
