@@ -286,6 +286,72 @@ public sealed class DesktopFoundationTests
     }
 
     [Fact]
+    public void ConversationStore_PruneThreadKeepsOnlyTheActivePathUpToTheMessage()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
+
+        var store = new ConversationStore(root);
+        var thread = store.CreateThread("Work", ConversationStore.GeneralFolder);
+        var root1 = new MessageDto(Guid.CreateVersion7().ToString(), thread.Id, null, "user", "First question", DateTimeOffset.UtcNow);
+        store.SaveMessage(root1);
+        var reply1 = new MessageDto(Guid.CreateVersion7().ToString(), thread.Id, root1.Id, "Aukenid", "First answer", DateTimeOffset.UtcNow.AddSeconds(1));
+        store.SaveMessage(reply1);
+        var root2 = new MessageDto(Guid.CreateVersion7().ToString(), thread.Id, reply1.Id, "user", "Second question", DateTimeOffset.UtcNow.AddSeconds(2));
+        store.SaveMessage(root2);
+        var reply2 = new MessageDto(Guid.CreateVersion7().ToString(), thread.Id, root2.Id, "Aukenid", "Second answer", DateTimeOffset.UtcNow.AddSeconds(3));
+        store.SaveMessage(reply2);
+
+        var remaining = store.PruneThread(thread.Id, reply1.Id);
+
+        Assert.NotNull(remaining);
+        Assert.Equal(2, remaining!.Count);
+        Assert.Equal([root1.Id, reply1.Id], remaining.Select(m => m.Id));
+
+        var persisted = store.ListMessages(thread.Id);
+        Assert.Equal(2, persisted.Count);
+        Assert.DoesNotContain(persisted, m => m.Id == root2.Id || m.Id == reply2.Id);
+
+        Directory.Delete(root, recursive: true);
+    }
+
+    [Fact]
+    public void ConversationStore_PruneThreadDeletesAttachmentsThatOnlyBelongedToDiscardedMessages()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
+
+        var store = new ConversationStore(root);
+        var thread = store.CreateThread("Work", ConversationStore.GeneralFolder);
+        var sourceFile = Path.Combine(Path.GetTempPath(), $"aukenid-attach-{Guid.NewGuid():N}.txt");
+        File.WriteAllText(sourceFile, "contents");
+        var storedName = store.SaveAttachment(thread.Id, sourceFile)!;
+
+        var user = new MessageDto(Guid.CreateVersion7().ToString(), thread.Id, null, "user", "Keep me", DateTimeOffset.UtcNow);
+        store.SaveMessage(user);
+        var discarded = new MessageDto(Guid.CreateVersion7().ToString(), thread.Id, user.Id, "user", "Drop me", DateTimeOffset.UtcNow.AddSeconds(1), [storedName]);
+        store.SaveMessage(discarded);
+
+        store.PruneThread(thread.Id, user.Id);
+
+        Assert.Null(store.TryGetAttachmentPath(thread.Id, storedName));
+
+        File.Delete(sourceFile);
+        Directory.Delete(root, recursive: true);
+    }
+
+    [Fact]
+    public void ConversationStore_PruneThreadReturnsNullWhenMessageIsMissing()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
+
+        var store = new ConversationStore(root);
+        var thread = store.CreateThread("Work", ConversationStore.GeneralFolder);
+
+        Assert.Null(store.PruneThread(thread.Id, "missing-id"));
+
+        Directory.Delete(root, recursive: true);
+    }
+
+    [Fact]
     public void ConversationStore_RenameThreadUpdatesPersistedTitle()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");

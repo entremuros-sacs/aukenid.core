@@ -302,6 +302,52 @@ public sealed class ConversationStore
         }
     }
 
+    /// <summary>
+    /// Cuts the tail after <paramref name="leafMessageId"/> (ADR-11 Prune): keeps only the active path
+    /// from the thread's root down to and including that message, discarding every other message -
+    /// discarded regenerations and anything that came after. Unlike <see cref="SplitThread"/>, this
+    /// rewrites the thread in place instead of creating a new one. Attachment files that only belonged
+    /// to discarded messages are deleted too, since there is no trash for them yet. Returns the
+    /// surviving messages, or null if <paramref name="leafMessageId"/> is missing.
+    /// </summary>
+    public IReadOnlyList<MessageDto>? PruneThread(string threadId, string leafMessageId)
+    {
+        lock (_sync)
+        {
+            var messages = ListMessages(threadId);
+            if (messages.All(m => m.Id != leafMessageId))
+            {
+                return null;
+            }
+
+            var keep = ResolveActivePath(messages, leafMessageId);
+            var keepIds = keep.Select(m => m.Id).ToHashSet(StringComparer.Ordinal);
+            var discarded = messages.Where(m => !keepIds.Contains(m.Id)).ToList();
+            if (discarded.Count == 0)
+            {
+                return keep;
+            }
+
+            var keptAttachments = keep.SelectMany(m => m.Attachments ?? (IReadOnlyList<string>)[]).ToHashSet(StringComparer.Ordinal);
+            var attachmentsDir = PeekAttachmentsDirectory(threadId);
+            if (attachmentsDir is not null)
+            {
+                var toDelete = discarded.SelectMany(m => m.Attachments ?? (IReadOnlyList<string>)[]).Where(name => !keptAttachments.Contains(name));
+                foreach (var name in toDelete)
+                {
+                    var path = Path.Combine(attachmentsDir, name);
+                    if (File.Exists(path))
+                    {
+                        File.Delete(path);
+                    }
+                }
+            }
+
+            RemoveMessagesFromThread(threadId, discarded.Select(m => m.Id).ToHashSet(StringComparer.Ordinal));
+            return keep;
+        }
+    }
+
     // The topic-shift exchange is just the trigger plus its direct reply, not the whole prefix.
     private static IReadOnlyList<MessageDto> BuildExchange(IReadOnlyList<MessageDto> messages, MessageDto trigger)
     {
