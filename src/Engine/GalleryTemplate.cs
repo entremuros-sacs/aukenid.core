@@ -20,6 +20,9 @@ internal static class GalleryTemplate
     public static string? LlamaCppName(string? galleryTemplate) =>
         MatchExact(galleryTemplate)?.Apply;
 
+    public static IReadOnlyList<string> StopSequences(string? galleryTemplate) =>
+        MatchExact(galleryTemplate)?.StopSequences ?? [];
+
     public static string? FamilyFromMetadata(IReadOnlyDictionary<string, string> metadata)
     {
         foreach (var key in MetadataKeys(metadata))

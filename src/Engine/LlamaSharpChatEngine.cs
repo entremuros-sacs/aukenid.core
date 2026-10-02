@@ -97,6 +97,15 @@ public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
         {
             // Local engine: no token cost. Run until EOS. The KV window is the only ceiling.
             MaxTokens = -1,
+            // Some GGUFs don't register their chat template's own turn-end token as an EOS the
+            // executor recognizes, so without this it can keep going past the real answer and
+            // hallucinate (and re-answer) further turns. See ChatTemplate.StopSequences.
+            AntiPrompts = GalleryTemplate.StopSequences(_templateName),
+            // Without this, a small model can degenerate into repeating/expanding the same phrase
+            // (e.g. "...-Instruct-Instruct-Instruct...") forever instead of reaching EOS - a
+            // different failure from the turn-boundary one above, since it never emits a stop
+            // sequence at all. 1.1 is llama.cpp's own long-standing default for this reason.
+            SamplingPipeline = new DefaultSamplingPipeline { RepeatPenalty = 1.1f },
         };
 
         await foreach (var token in InferTokensAsync(prompt, inferenceParams, cancellationToken))
@@ -202,7 +211,7 @@ public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
                         scholar=true for scientific papers.
                         Questions about this assistant, its controls, or the current chat: all false.
                         At most two of web/wiki/scholar true. When one is true, q is a short search query of at most 8 words naming the outside subject. Do not copy the user's sentence into q.
-                        document=true only when the user asks to put, add, write, fill, update, or show content in the side document panel for this thread (e.g. "add that to the document panel", "fill the panel with the draft", "pon eso en el panel"). document=true can combine with any other field. A message that only discusses or drafts content in the chat, without asking for the document panel specifically, is document=false.
+                        document=true only when the user asks to put, add, write, fill, update, or show content in the side document panel for this thread. The panel can be named anywhere in the sentence, including first, before the verb (e.g. "add that to the document panel", "fill the panel with the draft", "pon eso en el panel", "en el panel de documento, escribe/agrega/pon ...", "in the document panel, list ..."). document=true can combine with any other field. A message that only discusses or drafts content in the chat, without asking for the document panel specifically, is document=false. When document=true and the user already states what to write, web/wiki/scholar stay false unless they also explicitly ask you to look something up first.
                         folder=false only if this question is simple and self-contained (a greeting, a direct edit, a one-off fact, a continuation of this same chat) and does not need background from other conversations in the current project. Otherwise folder=true.
                         The user turn below may start with "Recent conversation:" followed by "Newest message:". newTopic=true only when the newest message has no connection at all to that recent conversation (a clear subject change, not a follow-up, clarification, or continuation). If there is no recent conversation shown, newTopic is always false.
                         """),

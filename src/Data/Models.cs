@@ -8,7 +8,8 @@ public sealed record ThreadDto(
     string Title,
     string FolderPath,
     DateTimeOffset Created,
-    bool HasMessages = false);
+    bool HasMessages = false,
+    bool HasDocument = false);
 
 public sealed record FolderDto(
     string Path,

@@ -147,13 +147,16 @@ public sealed class ConversationStore
                 if (thread is not null)
                 {
                     var hasMessages = File.ReadLines(filePath).Any(l => l.StartsWith("<!--msg ", StringComparison.Ordinal));
-                    threads.Add(thread with { HasMessages = hasMessages });
+                    var hasDocument = File.Exists(Path.Combine(Path.GetDirectoryName(filePath)!, DocumentFileName));
+                    threads.Add(thread with { HasMessages = hasMessages, HasDocument = hasDocument });
                 }
             }
 
             foreach (var (thread, messages) in _temporal.Values)
             {
-                threads.Add(thread with { HasMessages = messages.Count > 0 });
+                var dir = GetThreadDirectory(thread.Id);
+                var hasDocument = dir is not null && File.Exists(Path.Combine(dir, DocumentFileName));
+                threads.Add(thread with { HasMessages = messages.Count > 0, HasDocument = hasDocument });
             }
 
             return threads.OrderByDescending(t => t.Created).ToList();
