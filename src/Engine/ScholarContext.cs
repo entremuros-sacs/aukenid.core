@@ -24,7 +24,7 @@ public static partial class ScholarContext
         }
 
         var sb = new StringBuilder();
-        sb.Append("Academic papers for this question. Cite with markdown links [title](url). Prefer TL;DR over guessing. Do not mention this note unless asked.");
+        sb.Append(PromptLibrary.Get(PromptKey.ScholarGroundingNote));
 
         var n = 0;
         foreach (var paper in papers)

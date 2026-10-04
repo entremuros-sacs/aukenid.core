@@ -42,13 +42,7 @@ public sealed class DocumentTool
     /// so this one just needs the ordinary chat reply to summarize the change, not repeat it in full -
     /// the chat reply and the document panel update are complementary, not mutually exclusive.
     /// </summary>
-    public static ChatTurn GuidanceTurn() =>
-        new("system", """
-            The user's instruction is also being applied to the side document panel (a separate markdown
-            document, not this chat) by a separate process. Reply here with a brief, natural summary of
-            what you changed or added (a sentence or two) - do not restate or repeat the document's full
-            content in this chat reply.
-            """);
+    public static ChatTurn GuidanceTurn() => new("system", PromptLibrary.Get(PromptKey.DocumentGuidance));
 
     /// <summary>
     /// Builds an isolated prompt whose ONLY job is producing the document's new content: a small local
@@ -64,19 +58,7 @@ public sealed class DocumentTool
     {
         var turns = new List<ChatTurn>
         {
-            new("system", """
-                You write the content for a side markdown document panel. The conversation below and the
-                user's latest message describe what the document should contain or how to change it. If a
-                "Current document" block is shown, that is the document's existing content - edit it per
-                the latest instruction instead of starting over, unless asked to replace it entirely. If a
-                source file is attached, use it as material and perform the full requested transformation
-                (translate, rewrite, summarize, reorganize, fill in a template, etc.) rather than copying
-                it unchanged, unless a verbatim copy was explicitly asked for. If the content involves
-                code, include the explanation alongside it (comments in the code, surrounding prose, or
-                both) instead of only the bare code - that explanation belongs in the document too, not
-                just in chat. Output ONLY the document's own content - no greeting, no meta-narration
-                about what you are doing, no closing question or summary addressed to the user.
-                """),
+            new("system", PromptLibrary.Get(PromptKey.DocumentGenerationSystem)),
         };
 
         turns.AddRange(recentTurns);

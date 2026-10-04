@@ -28,7 +28,7 @@ public static partial class WebContext
         }
 
         var sb = new StringBuilder();
-        sb.Append("Live web search results are provided below. Answer from them. Never say you cannot browse the web or that a training cutoff prevents answering. Cite with markdown links [title](url).");
+        sb.Append(PromptLibrary.Get(PromptKey.WebGroundingNote));
 
         var n = 0;
         foreach (var hit in hits)

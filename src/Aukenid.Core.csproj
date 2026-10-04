@@ -45,6 +45,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Prompts\prompts.md" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Content Include="tessdata\*.traineddata">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>

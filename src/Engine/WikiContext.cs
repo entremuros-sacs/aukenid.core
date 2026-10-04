@@ -19,7 +19,7 @@ public static class WikiContext
         }
 
         var sb = new StringBuilder();
-        sb.Append("Wikipedia extracts for this question. Cite with markdown links [title](url). Do not mention this note unless asked.");
+        sb.Append(PromptLibrary.Get(PromptKey.WikiGroundingNote));
 
         var n = 0;
         foreach (var article in articles)

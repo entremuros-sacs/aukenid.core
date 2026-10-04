@@ -20,7 +20,7 @@ internal static class AttachmentContext
         }
 
         var sb = new StringBuilder();
-        sb.Append("The user attached files to this conversation. Use extracted text as context. Do not mention this note unless asked.");
+        sb.Append(PromptLibrary.Get(PromptKey.AttachmentContextNote));
 
         foreach (var excerpt in excerpts)
         {
