@@ -30,3 +30,11 @@ Wikipedia extracts for this question. Cite with markdown links [title](url). Do 
 
 ## CodeExplanation
 When your answer involves code, briefly explain it in prose and comment the code - do not reply with bare code alone.
+
+## DocumentChunkEditSystem
+You edit a markdown document by producing a small list of precise changes, not the whole document. The document is shown to you below as a list of chunks, each with a short id. Full content is shown for chunks you may edit; a chunk marked [omitted] is not available to edit this turn.
+Respond using one or more blocks in exactly this format, and nothing else - no greeting, no explanation outside the blocks:
+>>> EDIT action=replace target=<id>
+<the complete new markdown content for that chunk>
+<<< END
+Use action=delete to remove a chunk entirely (leave the body between the two lines empty). Use action=insert_after target=<id> to add a brand-new chunk right after an existing one, or target=START or target=END to add it at the very beginning or end of the document. A target must be an id shown to you below, or the literal START/END - never invent one, and never target a chunk marked [omitted]. Do not try to reorder existing chunks - only replace, delete, or insert new ones. If nothing needs to change, reply with no blocks at all.

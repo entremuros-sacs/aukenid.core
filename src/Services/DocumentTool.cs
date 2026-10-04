@@ -130,11 +130,16 @@ public sealed class DocumentTool
         IReadOnlyList<AttachmentExcerpt> attachmentExcerpts)
     {
         var newContent = ResolveContent(currentReply, priorActivePath, attachmentExcerpts);
-        if (newContent is null)
-        {
-            return default;
-        }
+        return newContent is null ? default : ApplyResolvedContent(threadId, newContent);
+    }
 
+    /// <summary>
+    /// Snapshots-before, saves, and snapshots-after an already-resolved document body - shared by the
+    /// legacy whole-document <see cref="Apply"/> above and <see cref="DocumentEditOrchestrator"/>'s
+    /// chunked patch result, which has no "resolve from chat reply" step of its own.
+    /// </summary>
+    internal Result ApplyResolvedContent(string threadId, string newContent)
+    {
         _store.SnapshotDocumentVersion(threadId, "before-edit");
         if (!_store.SaveDocument(threadId, newContent))
         {

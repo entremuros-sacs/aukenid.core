@@ -22,6 +22,7 @@ internal enum PromptKey
     ScholarGroundingNote,
     WikiGroundingNote,
     CodeExplanation,
+    DocumentChunkEditSystem,
 }
 
 /// <summary>
