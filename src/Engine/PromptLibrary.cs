@@ -12,7 +12,7 @@ using System.Text;
 /// validates both directions (every key has a section, every section has a key) and crashes on a
 /// mismatch instead of silently falling back to an empty or stale string.
 /// </summary>
-public enum PromptKey
+internal enum PromptKey
 {
     ToolRouterSystem,
     DocumentGuidance,
@@ -39,7 +39,14 @@ public static class PromptLibrary
     /// instead of on first use deep in a conversation turn.</summary>
     public static void Initialize() => _ = Prompts.Value;
 
-    public static string Get(PromptKey key) => Prompts.Value[key];
+    internal static string Get(PromptKey key) => Prompts.Value[key];
+
+    /// <summary>
+    /// The one always-on style nudge applied to every turn (no per-topic heuristic). A factory, like
+    /// <see cref="Services.DocumentTool.GuidanceTurn"/>, so callers outside Core never need to know
+    /// which <see cref="PromptKey"/> backs it.
+    /// </summary>
+    public static ChatTurn CodeExplanationTurn() => new("system", Get(PromptKey.CodeExplanation));
 
     private static IReadOnlyDictionary<PromptKey, string> Load()
     {
