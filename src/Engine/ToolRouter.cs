@@ -13,7 +13,7 @@ public static partial class ToolRouter
 {
     // Document is a separate axis from the retrieval tools (it names a write destination, not a
     // source), so it is never counted toward Any or the web/wiki/scholar cap in Cap().
-    public readonly record struct Plan(bool Wiki, bool Scholar, bool Web, string? Query = null, bool Explicit = false, bool Folder = true, bool NewTopic = false, bool Document = false)
+    public readonly record struct Plan(bool Wiki, bool Scholar, bool Web, string? Query = null, bool Explicit = false, bool Folder = true, bool NewTopic = false, bool Document = false, bool DocumentVerbatim = false)
     {
         public bool Any => Wiki || Scholar || Web;
 
@@ -63,6 +63,7 @@ public static partial class ToolRouter
             var scholar = Truthy(root, "scholar");
             var web = Truthy(root, "web");
             var documentFlag = Truthy(root, "document");
+            var documentVerbatim = Truthy(root, "documentVerbatim");
             string? queryText = null;
             if (root.TryGetProperty("q", out var q) && q.ValueKind == JsonValueKind.String)
             {
@@ -72,7 +73,7 @@ public static partial class ToolRouter
             var query = ShortQuery(queryText);
             var folder = FolderFlag(root);
             var newTopic = Truthy(root, "newTopic");
-            return Cap(wiki, scholar, web) with { Query = query, Explicit = true, Folder = folder, NewTopic = newTopic, Document = documentFlag };
+            return Cap(wiki, scholar, web) with { Query = query, Explicit = true, Folder = folder, NewTopic = newTopic, Document = documentFlag, DocumentVerbatim = documentVerbatim };
         }
         catch (JsonException)
         {
@@ -92,6 +93,7 @@ public static partial class ToolRouter
             Folder = model.Folder,
             NewTopic = model.NewTopic,
             Document = hard.Document || model.Document,
+            DocumentVerbatim = model.DocumentVerbatim,
         };
     }
 
@@ -106,7 +108,13 @@ public static partial class ToolRouter
     {
         if (hasAttachments)
         {
-            return new Plan(Wiki: false, Scholar: false, Web: false, Folder: false, Document: hard.Document || suggested.Document);
+            return new Plan(
+                Wiki: false,
+                Scholar: false,
+                Web: false,
+                Folder: false,
+                Document: hard.Document || suggested.Document,
+                DocumentVerbatim: suggested.DocumentVerbatim);
         }
 
         var plan = BindQuery(WithDefaultWeb(Merge(hard, suggested), prompt), prompt);

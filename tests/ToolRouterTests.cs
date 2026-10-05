@@ -71,6 +71,15 @@ public sealed class ToolRouterTests
     }
 
     [Fact]
+    public void PlanForTurn_WithAttachments_CarriesDocumentVerbatimThrough()
+    {
+        var hard = default(ToolRouter.Plan);
+        var suggested = new ToolRouter.Plan(Wiki: false, Scholar: false, Web: false, Document: true, DocumentVerbatim: true);
+        var plan = ToolRouter.PlanForTurn("put this file in the document panel as-is", hard, suggested, hasAttachments: true);
+        Assert.True(plan.DocumentVerbatim);
+    }
+
+    [Fact]
     public void PlanForTurn_StillRoutesWhenThereAreNoAttachments()
     {
         var empty = default(ToolRouter.Plan);
@@ -105,6 +114,13 @@ public sealed class ToolRouterTests
         var plan = ToolRouter.ParseModelPlan("{\"web\":false,\"wiki\":false,\"scholar\":false,\"document\":true}");
         Assert.True(plan.Document);
         Assert.False(plan.Any);
+    }
+
+    [Fact]
+    public void ParseModelPlan_ReadsDocumentVerbatimFlag()
+    {
+        var plan = ToolRouter.ParseModelPlan("{\"web\":false,\"wiki\":false,\"scholar\":false,\"document\":true,\"documentVerbatim\":true}");
+        Assert.True(plan.DocumentVerbatim);
     }
 
     [Fact]

@@ -1,12 +1,13 @@
 ## ToolRouterSystem
 Route retrieval tools. Reply with JSON only, no markdown, no explanation:
-{"web":false,"wiki":false,"scholar":false,"document":false,"q":"","folder":true,"newTopic":false}
+{"web":false,"wiki":false,"scholar":false,"document":false,"documentVerbatim":false,"q":"","folder":true,"newTopic":false}
 web=true for news, prices, products, versions, or when the user asks to look something up.
 wiki=true for encyclopedia definitions of people, places, or established concepts.
 scholar=true for scientific papers.
 Questions about this assistant, its controls, or the current chat: all false.
 At most two of web/wiki/scholar true. When one is true, q is a short search query of at most 8 words naming the outside subject. Do not copy the user's sentence into q.
 document=true only when the user asks to put, add, write, fill, update, or show content in the side document panel for this thread. The panel can be named anywhere in the sentence, including first, before the verb (e.g. "add that to the document panel", "fill the panel with the draft", "pon eso en el panel", "en el panel de documento, escribe/agrega/pon ...", "in the document panel, list ..."). document=true can combine with any other field. A message that only discusses or drafts content in the chat, without asking for the document panel specifically, is document=false. When document=true and the user already states what to write, web/wiki/scholar stay false unless they also explicitly ask you to look something up first.
+documentVerbatim=true only when document=true, a file is attached, and the user's own words ask only to place, import, paste, or work on that attached file in the document panel, with no further instruction about changing its content (e.g. "I am attaching a document and want to work on it in the document panel", "put this file in the panel", "pon este archivo en el panel"). documentVerbatim=false whenever the user also asks to translate, summarize, rewrite, reformat, fill a template, combine with other content, or otherwise change what the file says - in that case the file is only source material, not the final content. documentVerbatim is always false when document=false or no file is attached this turn.
 folder=false only if this question is simple and self-contained (a greeting, a direct edit, a one-off fact, a continuation of this same chat) and does not need background from other conversations in the current project. Otherwise folder=true.
 The user turn below may start with "Recent conversation:" followed by "Newest message:". newTopic=true only when the newest message has no connection at all to that recent conversation (a clear subject change, not a follow-up, clarification, or continuation). If there is no recent conversation shown, newTopic is always false.
 

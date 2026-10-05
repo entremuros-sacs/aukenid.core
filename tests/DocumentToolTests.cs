@@ -76,6 +76,84 @@ public sealed class DocumentToolTests
     }
 
     [Fact]
+    public void StripWholeDocumentCodeFence_UnwrapsEntireContentFence()
+    {
+        var wrapped = "```markdown\n# Title\n\nSome text.\n```";
+
+        var stripped = DocumentTool.StripWholeDocumentCodeFence(wrapped);
+
+        Assert.Equal("# Title\n\nSome text.", stripped);
+    }
+
+    [Fact]
+    public void StripWholeDocumentCodeFence_UnwrapsWithoutLanguageTag()
+    {
+        var wrapped = "```\n# Title\n\nSome text.\n```";
+
+        var stripped = DocumentTool.StripWholeDocumentCodeFence(wrapped);
+
+        Assert.Equal("# Title\n\nSome text.", stripped);
+    }
+
+    [Fact]
+    public void TryVerbatimMarkdownContent_SingleMarkdownAttachment_ReturnsRawTextUnchanged()
+    {
+        var excerpts = new[] { new AttachmentExcerpt("notes.md", "# Title\n\nSome text.", null) };
+
+        var content = DocumentTool.TryVerbatimMarkdownContent(excerpts);
+
+        Assert.Equal("# Title\n\nSome text.", content);
+    }
+
+    [Fact]
+    public void TryVerbatimMarkdownContent_NoAttachments_ReturnsNull()
+    {
+        Assert.Null(DocumentTool.TryVerbatimMarkdownContent([]));
+    }
+
+    [Fact]
+    public void TryVerbatimMarkdownContent_NonMarkdownAttachment_ReturnsNull()
+    {
+        var excerpts = new[] { new AttachmentExcerpt("notes.txt", "Plain text.", null) };
+
+        Assert.Null(DocumentTool.TryVerbatimMarkdownContent(excerpts));
+    }
+
+    [Fact]
+    public void TryVerbatimMarkdownContent_MixedMarkdownAndOtherAttachment_ReturnsNull()
+    {
+        var excerpts = new[]
+        {
+            new AttachmentExcerpt("notes.md", "# Title", null),
+            new AttachmentExcerpt("data.csv", "a,b,c", null),
+        };
+
+        Assert.Null(DocumentTool.TryVerbatimMarkdownContent(excerpts));
+    }
+
+    [Fact]
+    public void StripWholeDocumentCodeFence_LeavesDocumentWithItsOwnEmbeddedCodeBlockUntouched()
+    {
+        // A document that legitimately starts and ends with its own separate code examples must not
+        // be mistaken for one big accidental outer wrap.
+        var content = "```csharp\nvar x = 1;\n```\n\nSome prose.\n\n```csharp\nvar y = 2;\n```";
+
+        var stripped = DocumentTool.StripWholeDocumentCodeFence(content);
+
+        Assert.Equal(content, stripped);
+    }
+
+    [Fact]
+    public void StripWholeDocumentCodeFence_PlainContent_IsUnchanged()
+    {
+        var content = "# Title\n\nSome text.";
+
+        var stripped = DocumentTool.StripWholeDocumentCodeFence(content);
+
+        Assert.Equal(content, stripped);
+    }
+
+    [Fact]
     public void ResolveContent_WithAttachment_PrefersSubstantialReplyOverRawAttachment()
     {
         // The reply is what synthesizes/organizes the attachment's data (e.g. a template filled in

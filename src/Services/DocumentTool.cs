@@ -140,14 +140,41 @@ public sealed class DocumentTool
     /// </summary>
     internal Result ApplyResolvedContent(string threadId, string newContent)
     {
+        var content = StripWholeDocumentCodeFence(newContent);
         _store.SnapshotDocumentVersion(threadId, "before-edit");
-        if (!_store.SaveDocument(threadId, newContent))
+        if (!_store.SaveDocument(threadId, content))
         {
             return default;
         }
 
         _store.SnapshotDocumentVersion(threadId, "after-edit");
-        return new Result(true, newContent, _store.ListDocumentVersions(threadId));
+        return new Result(true, content, _store.ListDocumentVersions(threadId));
+    }
+
+    /// <summary>
+    /// A model asked to reproduce content verbatim (an attachment dump, or a chunked edit echoing an
+    /// existing chunk back) often wraps the whole thing in a markdown code fence out of habit, even
+    /// though the document itself is not meant to BE one giant code block. Only unwraps when the fence
+    /// spans the ENTIRE content with no other fence inside it - a document that legitimately contains
+    /// its own separate code blocks alongside other sections is left untouched, since there is then no
+    /// safe way to tell an accidental outer wrap from real content.
+    /// </summary>
+    internal static string StripWholeDocumentCodeFence(string content)
+    {
+        var trimmed = content.Trim();
+        if (!trimmed.StartsWith("```", System.StringComparison.Ordinal) || !trimmed.EndsWith("```", System.StringComparison.Ordinal) || trimmed.Length < 6)
+        {
+            return content;
+        }
+
+        var firstLineEnd = trimmed.IndexOf('\n');
+        if (firstLineEnd < 0)
+        {
+            return content;
+        }
+
+        var inner = trimmed[(firstLineEnd + 1)..^3];
+        return inner.Contains("```", System.StringComparison.Ordinal) ? content : inner.Trim();
     }
 
     /// <summary>
@@ -219,4 +246,27 @@ public sealed class DocumentTool
 
     private static bool IsSubstantial(string? text) =>
         !string.IsNullOrWhiteSpace(text) && text.Trim().Length >= MinSubstantialLength;
+
+    /// <summary>
+    /// Used only when the per-turn classifier judged this turn a pure "paste it as-is" request
+    /// (<c>ToolRouter.Plan.DocumentVerbatim</c>): combines markdown-extension attachments' raw text
+    /// unchanged, skipping generation entirely - a markdown file is already in the document's native
+    /// format, so there is nothing for a model to produce. Returns null (caller falls back to the
+    /// normal generation path) when there are no attachments, or any attachment present is not
+    /// markdown - a mixed/non-markdown attachment makes "paste as-is" ambiguous enough that guessing
+    /// is riskier than just generating normally.
+    /// </summary>
+    internal static string? TryVerbatimMarkdownContent(IReadOnlyList<AttachmentExcerpt> excerpts)
+    {
+        if (excerpts.Count == 0 || excerpts.Any(excerpt => !IsMarkdownFile(excerpt.FileName)))
+        {
+            return null;
+        }
+
+        return CombineAttachments(excerpts);
+    }
+
+    private static bool IsMarkdownFile(string fileName) =>
+        fileName.EndsWith(".md", System.StringComparison.OrdinalIgnoreCase)
+        || fileName.EndsWith(".markdown", System.StringComparison.OrdinalIgnoreCase);
 }
