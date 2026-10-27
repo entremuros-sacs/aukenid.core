@@ -4,19 +4,14 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 /// <summary>
 /// Resolves a chat-template family to llama.cpp's named template via <see cref="ChatTemplate.All"/>.
 /// Optional models.json in a host data directory is the Desktop gallery catalog, not shipped with Core.
 /// </summary>
-internal static class GalleryTemplate
+internal static partial class GalleryTemplate
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-    };
-
     public static string? LlamaCppName(string? galleryTemplate) =>
         MatchExact(galleryTemplate)?.Apply;
 
@@ -122,7 +117,7 @@ internal static class GalleryTemplate
             return null;
         }
 
-        var models = JsonSerializer.Deserialize<List<ModelRow>>(File.ReadAllText(path), JsonOptions);
+        var models = JsonSerializer.Deserialize(File.ReadAllText(path), GalleryJsonContext.Default.ListModelRow);
         if (models is null)
         {
             return null;
@@ -177,4 +172,8 @@ internal static class GalleryTemplate
 
         public string? Hash { get; set; }
     }
+
+    [JsonSerializable(typeof(List<ModelRow>))]
+    [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+    private sealed partial class GalleryJsonContext : JsonSerializerContext;
 }

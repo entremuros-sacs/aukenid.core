@@ -11,6 +11,9 @@
     <IsPackable>true</IsPackable>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
+
     <Authors>Jaime Olivares</Authors>
     <Company>Entremuros SACS</Company>
     <Copyright>Copyright © 2026 Entremuros SACS. All rights reserved.</Copyright>    

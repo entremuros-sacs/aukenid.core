@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using Aukenid.Core.Contracts;
 
@@ -24,15 +25,9 @@ public sealed record BookmarkList(
 /// <summary>
 /// Persists pointers to user prompts and lists them as a folder → thread → prompt tree.
 /// </summary>
-public sealed class BookmarkStore
+public sealed partial class BookmarkStore
 {
     public const int SnippetLength = 50;
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    };
 
     private readonly string _path;
     private readonly ConversationStore _conversations;
@@ -196,7 +191,7 @@ public sealed class BookmarkStore
 
         try
         {
-            var parsed = JsonSerializer.Deserialize<FileModel>(File.ReadAllText(_path), JsonOptions);
+            var parsed = JsonSerializer.Deserialize(File.ReadAllText(_path), BookmarkJsonContext.Default.FileModel);
             if (parsed?.Items is { Count: > 0 })
             {
                 _items = parsed.Items
@@ -222,7 +217,7 @@ public sealed class BookmarkStore
         var model = new FileModel(_items
             .Select(item => new FileItem(item.ThreadId, item.MessageId))
             .ToList());
-        File.WriteAllText(_path, JsonSerializer.Serialize(model, JsonOptions));
+        File.WriteAllText(_path, JsonSerializer.Serialize(model, BookmarkJsonContext.Default.FileModel));
     }
 
     private sealed record BookmarkPointer(string ThreadId, string MessageId);
@@ -230,4 +225,8 @@ public sealed class BookmarkStore
     private sealed record FileItem(string ThreadId, string MessageId);
 
     private sealed record FileModel(List<FileItem> Items);
+
+    [JsonSerializable(typeof(FileModel))]
+    [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+    private sealed partial class BookmarkJsonContext : JsonSerializerContext;
 }

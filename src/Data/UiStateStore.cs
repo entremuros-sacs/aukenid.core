@@ -2,13 +2,12 @@ namespace Aukenid.Core.Data;
 
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 
 /// <summary>Remembers which sidebar folder was last expanded, and which model was last active, across app launches.</summary>
-public sealed class UiStateStore
+public sealed partial class UiStateStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
-
     private readonly string _path;
     private readonly Lock _sync = new();
 
@@ -51,7 +50,7 @@ public sealed class UiStateStore
             Directory.CreateDirectory(dir);
         }
 
-        File.WriteAllText(_path, JsonSerializer.Serialize(new FileModel(SelectedFolder, SelectedModelId), JsonOptions));
+        File.WriteAllText(_path, JsonSerializer.Serialize(new FileModel(SelectedFolder, SelectedModelId), UiStateJsonContext.Default.FileModel));
     }
 
     private void Load()
@@ -65,7 +64,7 @@ public sealed class UiStateStore
 
             try
             {
-                var parsed = JsonSerializer.Deserialize<FileModel>(File.ReadAllText(_path), JsonOptions);
+                var parsed = JsonSerializer.Deserialize(File.ReadAllText(_path), UiStateJsonContext.Default.FileModel);
                 if (!string.IsNullOrWhiteSpace(parsed?.SelectedFolder))
                 {
                     SelectedFolder = parsed.SelectedFolder;
@@ -81,4 +80,8 @@ public sealed class UiStateStore
     }
 
     private sealed record FileModel(string SelectedFolder, string? SelectedModelId = null);
+
+    [JsonSerializable(typeof(FileModel))]
+    [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
+    private sealed partial class UiStateJsonContext : JsonSerializerContext;
 }
