@@ -22,6 +22,8 @@ public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
 
     public string? ActiveModelName { get; private set; }
 
+    public bool IsGpuEnabled { get; private set; }
+
     public string? StreamNoticeKey { get; private set; }
 
     public const string ContextIssueKey = "error.context";
@@ -41,27 +43,39 @@ public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
 
     public Task LoadModelAsync(string profileId, CancellationToken cancellationToken)
     {
-        PrepareRuntime();
         // Photino's web-message callback runs on the UI thread; LLamaWeights.LoadFromFile is a
         // long, synchronous, CPU-bound call, so it must run off-thread or the WebView freezes and
         // can't paint the loading overlay until this returns.
         return Task.Run(() =>
         {
+            IsGpuEnabled = false;
+            PrepareRuntime();
             var path = File.Exists(profileId) ? profileId : _weightsPath;
             if (!File.Exists(path))
             {
                 throw new FileNotFoundException("GGUF model file not found.", path);
             }
 
-            var parameters = new ModelParams(path)
+            var cpuParams = new ModelParams(path)
             {
                 // Gallery usable ctx (ADR-14). Size of the KV cache, not a product quota.
                 ContextSize = 8192,
             };
 
-            // Load the new file before dropping the old weights so a failed switch keeps a working model.
-            var newWeights = LLamaWeights.LoadFromFile(parameters);
-            var newExecutor = new StatelessExecutor(newWeights, parameters);
+            // Prefer GPU backends when available, but fall back silently if it fails.
+            var gpuParams = TryCreateGpuParams(path);
+            LLamaWeights newWeights;
+            StatelessExecutor newExecutor;
+            if (gpuParams is not null)
+            {
+                (newWeights, newExecutor) = TryLoadWithFallback(gpuParams, cpuParams);
+            }
+            else
+            {
+                newWeights = LLamaWeights.LoadFromFile(cpuParams);
+                newExecutor = new StatelessExecutor(newWeights, cpuParams);
+            }
+
             var previous = _weights;
             _weights = newWeights;
             _executor = newExecutor;
@@ -70,6 +84,52 @@ public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
             _templateName ??= GalleryTemplate.FamilyFromMetadata(newWeights.Metadata);
             ActiveModelName = BuildShortName(_weights.Metadata);
         }, cancellationToken);
+    }
+
+    private static ModelParams? TryCreateGpuParams(string path)
+    {
+        try
+        {
+            var backend = OperatingSystem.IsWindows()
+                ? CudaBackendBootstrapper.TryPrepareNativeDirectory()
+                : MetalBackendBootstrapper.TryPrepareNativeDirectory();
+            if (backend is null)
+            {
+                return null;
+            }
+
+            return new ModelParams(path)
+            {
+                ContextSize = 8192,
+                GpuLayerCount = 999,
+                MainGpu = 0,
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private (LLamaWeights Weights, StatelessExecutor Executor) TryLoadWithFallback(ModelParams gpuParams, ModelParams cpuParams)
+    {
+        try
+        {
+            var weights = LLamaWeights.LoadFromFile(gpuParams);
+            var executor = new StatelessExecutor(weights, gpuParams);
+            IsGpuEnabled = true;
+            HostLog.Line("gpu", "GPU backend enabled.");
+            return (weights, executor);
+        }
+        catch (Exception ex)
+        {
+            HostLog.Line("gpu", "GPU backend failed; falling back to CPU. " + HostLog.Describe(ex));
+
+            var weights = LLamaWeights.LoadFromFile(cpuParams);
+            var executor = new StatelessExecutor(weights, cpuParams);
+            IsGpuEnabled = false;
+            return (weights, executor);
+        }
     }
 
     // GGUF's general.basename ("Llama-3.2") + general.size_label ("3B") gives a short, human name

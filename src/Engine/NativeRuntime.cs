@@ -25,7 +25,17 @@ internal static class NativeRuntime
                 return;
             }
 
-            var directories = SearchDirectories().Where(Directory.Exists).Distinct(StringComparer.Ordinal).ToArray();
+            var cudaNative = CudaBackendBootstrapper.TryPrepareNativeDirectory();
+            var metalNative = MetalBackendBootstrapper.TryPrepareNativeDirectory();
+
+            var directories = SearchDirectories()
+                .Prepend(cudaNative)
+                .Prepend(metalNative)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Select(path => path!)
+                .Where(Directory.Exists)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
             if (directories.Length > 0)
             {
                 NativeLibraryConfig.All.WithSearchDirectories(directories);

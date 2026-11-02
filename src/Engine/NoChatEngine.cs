@@ -13,6 +13,8 @@ public sealed class NoChatEngine : IChatEngine
 
     public string? ActiveModelName { get; private set; }
 
+    public bool IsGpuEnabled => false;
+
     public string? StreamNoticeKey => null;
 
     public Task LoadModelAsync(string profileId, CancellationToken cancellationToken)
