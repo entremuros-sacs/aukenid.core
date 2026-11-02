@@ -26,11 +26,9 @@ internal static class NativeRuntime
             }
 
             var cudaNative = CudaBackendBootstrapper.TryPrepareNativeDirectory();
-            var metalNative = MetalBackendBootstrapper.TryPrepareNativeDirectory();
 
             var directories = SearchDirectories()
                 .Prepend(cudaNative)
-                .Prepend(metalNative)
                 .Where(path => !string.IsNullOrWhiteSpace(path))
                 .Select(path => path!)
                 .Where(Directory.Exists)

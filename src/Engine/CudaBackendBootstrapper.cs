@@ -5,9 +5,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
-using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 using System.Threading;
 using LLama;
 
@@ -16,10 +14,6 @@ internal static class CudaBackendBootstrapper
     private static readonly object Gate = new();
     private static bool _prepared;
     private static string? _nativeDirectory;
-
-    private static readonly Regex VersionPrefix = new(
-        @"^(?<v>\d+(?:\.\d+){1,3})",
-        RegexOptions.Compiled);
 
     // https://learn.microsoft.com/nuget/api/package-base-address-resource
     private const string NuGetFlatContainer = "https://api.nuget.org/v3-flatcontainer/";
@@ -61,7 +55,7 @@ internal static class CudaBackendBootstrapper
             return null;
         }
 
-        var version = DetermineLlmaSharpVersion();
+        var version = BackendPackageVersion.Resolve();
         if (version is null)
         {
             return null;
@@ -100,28 +94,6 @@ internal static class CudaBackendBootstrapper
         return false;
     }
 
-    private static string? DetermineLlmaSharpVersion()
-    {
-        try
-        {
-            var assembly = typeof(LLamaWeights).Assembly;
-            var info = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-            var text = info ?? assembly.GetName().Version?.ToString();
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                return null;
-            }
-
-            text = text.Trim();
-            var match = VersionPrefix.Match(text);
-            return match.Success ? match.Groups["v"].Value : null;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
     private static string? EnsureBackendPresent(string packageId, string version)
     {
         var baseDir = Path.Combine(
@@ -158,11 +130,13 @@ internal static class CudaBackendBootstrapper
         {
             if (!DownloadToFile(url, temp))
             {
+	                HostLog.Line("cuda", $"Download failed for {packageId} {version}.");
                 return null;
             }
 
             if (!ExtractNativeFromNupkg(temp, baseDir))
             {
+	                HostLog.Line("cuda", $"Extract failed for {packageId} {version}.");
                 return null;
             }
 
@@ -197,6 +171,7 @@ internal static class CudaBackendBootstrapper
                 .GetResult();
             if (!response.IsSuccessStatusCode)
             {
+	            HostLog.Line("cuda", $"Download failed: HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
                 return false;
             }
 
@@ -205,8 +180,9 @@ internal static class CudaBackendBootstrapper
             source.CopyTo(destination);
             return true;
         }
-        catch
+	    catch (Exception ex)
         {
+	        HostLog.Line("cuda", "Download failed. " + HostLog.Describe(ex));
             return false;
         }
     }

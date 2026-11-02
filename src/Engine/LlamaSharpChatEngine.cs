@@ -90,12 +90,22 @@ public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
     {
         try
         {
-            var backend = OperatingSystem.IsWindows()
-                ? CudaBackendBootstrapper.TryPrepareNativeDirectory()
-                : MetalBackendBootstrapper.TryPrepareNativeDirectory();
-            if (backend is null)
+            if (OperatingSystem.IsWindows())
             {
-                return null;
+                // Only enable GPU params if CUDA is actually present + backend natives were prepared.
+                if (CudaBackendBootstrapper.TryPrepareNativeDirectory() is null)
+                {
+                    return null;
+                }
+            }
+            else
+            {
+                // On macOS we can attempt to enable Metal by setting GPU layers.
+                // If the Metal native library isn't present or fails to load, we fall back to CPU.
+                if (!OperatingSystem.IsMacOS())
+                {
+                    return null;
+                }
             }
 
             return new ModelParams(path)
@@ -117,8 +127,8 @@ public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
         {
             var weights = LLamaWeights.LoadFromFile(gpuParams);
             var executor = new StatelessExecutor(weights, gpuParams);
-            IsGpuEnabled = true;
-            HostLog.Line("gpu", "GPU backend enabled.");
+            IsGpuEnabled = gpuParams.GpuLayerCount > 0;
+            HostLog.Line("gpu", $"GPU backend enabled. n_gpu_layers={gpuParams.GpuLayerCount}");
             return (weights, executor);
         }
         catch (Exception ex)
