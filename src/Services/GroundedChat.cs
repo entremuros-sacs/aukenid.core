@@ -138,13 +138,15 @@ public sealed class GroundedChat
 
         var text = await engine.CompleteAsync(turns, cancellationToken);
         warning ??= engine.StreamNoticeKey;
-        if (citations.Count > 0 && !string.IsNullOrWhiteSpace(text))
+
+        var filteredCitations = SourceCitations.FilterByMentionedInAnswer(text, citations);
+        if (filteredCitations.Count > 0 && !string.IsNullOrWhiteSpace(text))
         {
-            text = SourceCitations.Append(text, citations);
+            text = SourceCitations.Append(text, filteredCitations);
         }
 
         conversation.Add(new ChatTurn("assistant", text));
-        return new GroundedReply(text, plan, citations, warning);
+        return new GroundedReply(text, plan, filteredCitations, warning);
     }
 
     private static void InsertBeforeLastUser(List<ChatTurn> turns, ChatTurn? extra)
