@@ -15,7 +15,7 @@ Its purpose is functional evaluation by developers (accuracy, performance, priva
 Run the CLI and point it to your local model:
 
 ```bash
-dotnet run --project cli/Aukenid.CLI/Aukenid.CLI.csproj -- --gguf /path/to/model.gguf
+dotnet run --project cli/Aukenid.CLI.csproj -- --gguf /path/to/model.gguf
 ```
 
 After loading the model, the app opens an interactive prompt.

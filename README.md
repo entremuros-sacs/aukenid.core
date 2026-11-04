@@ -26,7 +26,7 @@ Requires .NET 10 and a local `.gguf` file.
 See the CLI user manual: [wiki/Aukenid.CLI.md](./wiki/Aukenid.CLI.md)
 
 ```bash
-dotnet run --project cli/Aukenid.CLI/Aukenid.CLI.csproj -- --gguf /path/to/model.gguf
+dotnet run --project cli/Aukenid.CLI.csproj -- --gguf /path/to/model.gguf
 ```
 
 The app loads the model, prints a short help, then keeps the conversation until you type `exit`, `quit`, or `end`.

@@ -53,7 +53,7 @@ internal sealed class Program
             Aukenid.CLI
 
             Usage:
-              dotnet run --project cli/Aukenid.CLI/Aukenid.CLI.csproj -- --gguf <path.gguf> [--template <name>]
+              dotnet run --project cli/Aukenid.CLI.csproj -- --gguf <path.gguf> [--template <name>]
 
             Options:
               --gguf <path>          Required path to local .gguf model file
@@ -446,7 +446,7 @@ internal sealed class CliApp
             Aukenid.CLI
 
             Usage:
-              dotnet run --project cli/Aukenid.CLI/Aukenid.CLI.csproj -- --gguf <path.gguf> [--template <name>]
+              dotnet run --project cli/Aukenid.CLI.csproj -- --gguf <path.gguf> [--template <name>]
 
             Options:
               --gguf <path>          Required path to local .gguf model file

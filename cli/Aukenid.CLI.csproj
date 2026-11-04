@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/Aukenid.Core.csproj" />
+    <ProjectReference Include="../src/Aukenid.Core.csproj" />
   </ItemGroup>
 
 </Project>
