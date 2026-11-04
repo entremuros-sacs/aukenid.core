@@ -39,18 +39,42 @@ public sealed class GroundedChat
         string userText,
         CancellationToken cancellationToken)
     {
+        return await ReplyAsync(
+            engine,
+            conversation,
+            userText,
+            hasAttachments: false,
+            injectBeforeLastUser: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<GroundedReply> ReplyAsync(
+        IChatEngine engine,
+        IList<ChatTurn> conversation,
+        string userText,
+        bool hasAttachments,
+        Func<ToolRouter.Plan, IEnumerable<ChatTurn?>>? injectBeforeLastUser,
+        CancellationToken cancellationToken)
+    {
         var history = conversation.ToList();
         conversation.Add(new ChatTurn("user", userText));
 
         var hard = ToolRouter.HardSignals(userText);
         var suggested = await engine.SuggestToolsAsync(history, userText, cancellationToken);
-        var plan = ToolRouter.PlanForTurn(userText, hard, suggested, hasAttachments: false, history);
+        var plan = ToolRouter.PlanForTurn(userText, hard, suggested, hasAttachments, history);
         if (plan.Any)
         {
             HostLog.Line("tools", $"web={plan.Web} wiki={plan.Wiki} scholar={plan.Scholar}");
         }
 
         var turns = conversation.ToList();
+        if (injectBeforeLastUser is not null)
+        {
+            foreach (var extra in injectBeforeLastUser(plan))
+            {
+                InsertBeforeLastUser(turns, extra);
+            }
+        }
         var citations = new List<Citation>();
         string? warning = null;
 
@@ -114,7 +138,7 @@ public sealed class GroundedChat
 
         var text = await engine.CompleteAsync(turns, cancellationToken);
         warning ??= engine.StreamNoticeKey;
-        if (citations.Count > 0 && !string.IsNullOrWhiteSpace(text) && warning is null)
+        if (citations.Count > 0 && !string.IsNullOrWhiteSpace(text))
         {
             text = SourceCitations.Append(text, citations);
         }

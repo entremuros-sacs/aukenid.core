@@ -8,7 +8,7 @@ using System.Linq;
 using Aukenid.Core.Contracts;
 
 /// <summary>Reads and writes the markdown format used to persist a single conversation.</summary>
-internal static class ConversationMarkdown
+public static class ConversationMarkdown
 {
     public static string BuildHeader(ThreadDto thread) =>
         $"<!--thread id={thread.Id} created={thread.Created:O}-->{Environment.NewLine}# {thread.Title}{Environment.NewLine}{Environment.NewLine}";

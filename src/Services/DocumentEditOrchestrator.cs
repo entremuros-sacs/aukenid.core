@@ -16,7 +16,7 @@ using Aukenid.Core.Engine;
 /// rejected outright (<see cref="TryApplyPatch"/> returns null) so the caller can fall back to the
 /// legacy full-regeneration path for that turn, rather than risk a half-applied or corrupt document.
 /// </summary>
-internal static partial class DocumentEditOrchestrator
+public static partial class DocumentEditOrchestrator
 {
     // Chunks are included in full, in document order, until this budget is spent; the rest are shown
     // as an outline only (id + kind + heading, no body) - same oldest-first-wins shape as

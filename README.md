@@ -2,7 +2,9 @@
 
 Source code of the core component of Aukenid AI:  local GGUF chat, conversation storage, attachments, and web/wiki/scholar tools.
 
-Not for commercial or any other unauthorized usage. Read the License.
+License: PolyForm Strict License 1.0.0 (see `LICENSE`).
+
+Not for commercial or any other unauthorized usage.
 
 ## Layout
 

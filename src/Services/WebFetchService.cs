@@ -15,8 +15,8 @@ public sealed class WebFetchService
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(8);
     private const int MaxBytes = 200 * 1024;
-    internal const int MaxRedirects = 5;
-    internal static readonly HttpRequestOptionsKey<IPAddress[]> PinnedAddressesKey = new("Aukenid.PinnedAddresses");
+    public const int MaxRedirects = 5;
+    public static readonly HttpRequestOptionsKey<IPAddress[]> PinnedAddressesKey = new("Aukenid.PinnedAddresses");
 
     private readonly HttpClient _http;
     private readonly Func<string, CancellationToken, Task<IPAddress[]>> _resolve;
@@ -26,7 +26,7 @@ public sealed class WebFetchService
     {
     }
 
-    internal WebFetchService(HttpMessageHandler handler, Func<string, CancellationToken, Task<IPAddress[]>>? resolve)
+    public WebFetchService(HttpMessageHandler handler, Func<string, CancellationToken, Task<IPAddress[]>>? resolve)
     {
         _http = new HttpClient(handler, disposeHandler: true) { Timeout = Timeout };
         _resolve = resolve ?? ResolveDns;
@@ -145,7 +145,7 @@ public sealed class WebFetchService
 
     // Called again on the socket path so a private address cannot be dialed
     // even if it was attached after the name was checked.
-    internal static void RejectBlockedPins(IPAddress[] addresses)
+    public static void RejectBlockedPins(IPAddress[] addresses)
     {
         if (addresses.Length == 0 || addresses.Any(IsBlockedAddress))
         {

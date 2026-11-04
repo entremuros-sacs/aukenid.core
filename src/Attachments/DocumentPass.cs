@@ -11,7 +11,7 @@ using System.Text.RegularExpressions;
 /// A document that does not fit beside the conversation is read in slices. Each slice
 /// becomes a short digest. Those digests are stored and reused for later questions.
 /// </summary>
-internal static partial class DocumentPass
+public static partial class DocumentPass
 {
     public const int CharsPerToken = 3;
     public const int ContextTokens = 8192;
@@ -21,9 +21,9 @@ internal static partial class DocumentPass
     public const int FullReadChars = 1_500_000;
     public const int DigestChars = 1500;
 
-    internal readonly record struct PageBlock(int Number, string Text);
+    public readonly record struct PageBlock(int Number, string Text);
 
-    internal readonly record struct Slice(
+    public readonly record struct Slice(
         string FileName,
         int FromPage,
         int ToPage,

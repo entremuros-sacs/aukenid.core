@@ -5,9 +5,9 @@ using System.Collections.Generic;
 using System.Text;
 using Aukenid.Core.Engine;
 
-internal sealed record AttachmentExcerpt(string FileName, string? Text, string? ErrorKey);
+public sealed record AttachmentExcerpt(string FileName, string? Text, string? ErrorKey);
 
-internal static class AttachmentContext
+public static class AttachmentContext
 {
     public const int MaxTotalChars = 8000;
     public const int MaxCharsPerFile = 4000;

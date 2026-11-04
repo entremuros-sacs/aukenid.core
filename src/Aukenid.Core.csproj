@@ -43,8 +43,6 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Aukenid.Core.Tests" />
-    <InternalsVisibleTo Include="Aukenid.Desktop.Tests" />
-    <InternalsVisibleTo Include="AukenidAI" />
   </ItemGroup>
 
   <ItemGroup>

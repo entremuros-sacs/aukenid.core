@@ -11,7 +11,7 @@ using Aukenid.Core.Engine;
 /// A digest sits beside the attachment as <c>{stored-name}.digest</c>.
 /// It is reused while the file's length and write time are unchanged.
 /// </summary>
-internal static class DocumentDigest
+public static class DocumentDigest
 {
     public const string Suffix = ".digest";
     public const int MaxSidecarBytes = 2_000_000;

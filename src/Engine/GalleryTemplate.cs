@@ -10,7 +10,7 @@ using System.Text.Json.Serialization;
 /// Resolves a chat-template family to llama.cpp's named template via <see cref="ChatTemplate.All"/>.
 /// Optional models.json in a host data directory is the Desktop gallery catalog, not shipped with Core.
 /// </summary>
-internal static partial class GalleryTemplate
+public static partial class GalleryTemplate
 {
     public static string? LlamaCppName(string? galleryTemplate) =>
         MatchExact(galleryTemplate)?.Apply;

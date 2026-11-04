@@ -8,7 +8,7 @@ using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 
 /// <summary>PDF transcript of a thread: markdown messages with real GFM tables, not pipe text.</summary>
-internal static class ThreadExportService
+public static class ThreadExportService
 {
     static ThreadExportService()
     {

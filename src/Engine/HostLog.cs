@@ -4,7 +4,7 @@ using System;
 using System.Text.RegularExpressions;
 
 /// <summary>Short host diagnostics on stderr. Never dump prompts, attachment paths, or file contents.</summary>
-internal static class HostLog
+public static class HostLog
 {
     private static readonly Regex SecretAssignment = new(
         @"\b(api[_-]?key|secret|token|password|authorization)\b\s*[=:]\s*\S+",

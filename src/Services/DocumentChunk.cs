@@ -1,7 +1,7 @@
 namespace Aukenid.Core.Services;
 
 /// <summary>The kind of markdown block (or run of same-kind blocks) a <see cref="DocumentChunk"/> wraps.</summary>
-internal enum DocumentChunkKind
+public enum DocumentChunkKind
 {
     Heading,
     Paragraph,
@@ -21,4 +21,4 @@ internal enum DocumentChunkKind
 /// prompt outline only (the enclosing section's heading, suffixed for a split section's later parts);
 /// it is not part of <see cref="Text"/> unless the chunk itself IS that heading block.
 /// </summary>
-internal sealed record DocumentChunk(string Id, DocumentChunkKind Kind, string? HeadingPath, string Text);
+public sealed record DocumentChunk(string Id, DocumentChunkKind Kind, string? HeadingPath, string Text);

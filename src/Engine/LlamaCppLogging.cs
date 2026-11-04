@@ -9,7 +9,7 @@ using LLama.Native;
 /// warning or error once. Drop prompt text, continue-fragments, paths, and lines that
 /// would otherwise print as only "Warning".
 /// </summary>
-internal static class LlamaCppLogging
+public static class LlamaCppLogging
 {
     private static readonly HashSet<string> Printed = new(StringComparer.Ordinal);
 
@@ -24,7 +24,7 @@ internal static class LlamaCppLogging
     /// Text safe to print, or null when the line must stay off the console.
     /// An error whose body cannot be shown becomes one shared "llama.cpp error" line.
     /// </summary>
-    internal static string? Detail(bool error, string message)
+    public static string? Detail(bool error, string message)
     {
         if (!LooksLikePromptDump(message) && message.Length <= 120)
         {

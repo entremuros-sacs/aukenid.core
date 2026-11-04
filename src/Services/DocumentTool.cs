@@ -51,7 +51,7 @@ public sealed class DocumentTool
     /// else to dilute it (the same reasoning the engine already applies to title generation and tool
     /// routing - a separate focused completion for one job, instead of overloading the main reply).
     /// </summary>
-    internal static IReadOnlyList<ChatTurn> GenerationTurns(
+    public static IReadOnlyList<ChatTurn> GenerationTurns(
         IReadOnlyList<ChatTurn> recentTurns,
         string? currentDocument,
         IReadOnlyList<AttachmentExcerpt> attachmentExcerpts)
@@ -123,7 +123,7 @@ public sealed class DocumentTool
     /// then snapshots-before, saves, and snapshots-after so the write is itself undoable.
     /// <c>Result.Applied</c> is false when nothing substantial enough was found to write.
     /// </summary>
-    internal Result Apply(
+    public Result Apply(
         string threadId,
         string currentReply,
         IReadOnlyList<MessageDto> priorActivePath,
@@ -138,7 +138,7 @@ public sealed class DocumentTool
     /// legacy whole-document <see cref="Apply"/> above and <see cref="DocumentEditOrchestrator"/>'s
     /// chunked patch result, which has no "resolve from chat reply" step of its own.
     /// </summary>
-    internal Result ApplyResolvedContent(string threadId, string newContent)
+    public Result ApplyResolvedContent(string threadId, string newContent)
     {
         var content = StripWholeDocumentCodeFence(newContent);
         _store.SnapshotDocumentVersion(threadId, "before-edit");
@@ -159,7 +159,7 @@ public sealed class DocumentTool
     /// its own separate code blocks alongside other sections is left untouched, since there is then no
     /// safe way to tell an accidental outer wrap from real content.
     /// </summary>
-    internal static string StripWholeDocumentCodeFence(string content)
+    public static string StripWholeDocumentCodeFence(string content)
     {
         var trimmed = content.Trim();
         if (!trimmed.StartsWith("```", System.StringComparison.Ordinal) || !trimmed.EndsWith("```", System.StringComparison.Ordinal) || trimmed.Length < 6)
@@ -185,7 +185,7 @@ public sealed class DocumentTool
     /// confirmation with nothing substantial of its own (e.g. "put this file in the document panel"
     /// with no other instruction).
     /// </summary>
-    internal static string? ResolveContent(
+    public static string? ResolveContent(
         string currentReply,
         IReadOnlyList<MessageDto> priorActivePath,
         IReadOnlyList<AttachmentExcerpt> attachmentExcerpts)
@@ -198,7 +198,7 @@ public sealed class DocumentTool
     /// right now); otherwise falls back to the most recent substantial assistant message already on
     /// the active path, newest first. Returns null if nothing substantial is found either way.
     /// </summary>
-    internal static string? ResolveContent(string currentReply, IReadOnlyList<MessageDto> priorActivePath)
+    public static string? ResolveContent(string currentReply, IReadOnlyList<MessageDto> priorActivePath)
     {
         if (IsSubstantial(currentReply))
         {
@@ -256,7 +256,7 @@ public sealed class DocumentTool
     /// markdown - a mixed/non-markdown attachment makes "paste as-is" ambiguous enough that guessing
     /// is riskier than just generating normally.
     /// </summary>
-    internal static string? TryVerbatimMarkdownContent(IReadOnlyList<AttachmentExcerpt> excerpts)
+    public static string? TryVerbatimMarkdownContent(IReadOnlyList<AttachmentExcerpt> excerpts)
     {
         if (excerpts.Count == 0 || excerpts.Any(excerpt => !IsMarkdownFile(excerpt.FileName)))
         {

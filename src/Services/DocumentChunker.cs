@@ -17,7 +17,7 @@ using Markdig.Syntax;
 /// exact drift this chunking exists to avoid. That one case is left to the existing context-overflow
 /// handling (DesktopBridge.IsContextOverflow) rather than solved here.
 /// </summary>
-internal static class DocumentChunker
+public static class DocumentChunker
 {
     public const int ChunkBudgetChars = 1200;
     private const int SectionHeadingMaxLevel = 3;
