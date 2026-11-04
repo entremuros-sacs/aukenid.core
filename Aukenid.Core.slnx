@@ -2,6 +2,9 @@
   <Folder Name="/src/">
     <Project Path="src/Aukenid.Core.csproj" />
   </Folder>
+  <Folder Name="/cli/">
+    <Project Path="cli/Aukenid.CLI/Aukenid.CLI.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Aukenid.Core.Tests.csproj" />
   </Folder>

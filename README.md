@@ -9,7 +9,7 @@ Not for commercial or any other unauthorized usage.
 ## Layout
 
 - `src/` — packable library (`dotnet pack`)
-- `cli/` — PowerShell chat host (`Chat.ps1`) that calls `LlamaSharpChatEngine` directly
+- `cli/` — C# interactive console app (`Aukenid.CLI`) used to run the core
 - `tests/` — unit tests
 
 ## Build and test
@@ -21,14 +21,15 @@ dotnet test tests/Aukenid.Core.Tests.csproj
 
 ## Chat CLI
 
-Requires PowerShell 7 (`pwsh`) and a local `.gguf` file. The script builds `Aukenid.Core` and calls `LlamaSharpChatEngine` from the same process (`PrepareRuntime`, `LoadModelAsync`, `CompleteAsync`).
+Requires .NET 10 and a local `.gguf` file.
+
+See the CLI user manual: [wiki/Aukenid.CLI.md](./wiki/Aukenid.CLI.md)
 
 ```bash
-./cli/Chat.ps1 -Gguf /path/to/model.gguf
-./cli/Chat.ps1 -Gguf /path/to/model.gguf -Prompt "Hello"
+dotnet run --project cli/Aukenid.CLI/Aukenid.CLI.csproj -- --gguf /path/to/model.gguf
 ```
 
-The script loads the model, prints a reply, then keeps the conversation until you type `exit`, `quit`, or `end`.
+The app loads the model, prints a short help, then keeps the conversation until you type `exit`, `quit`, or `end`.
 
 ## Optional GPU backends
 
