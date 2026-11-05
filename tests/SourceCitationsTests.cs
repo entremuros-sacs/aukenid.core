@@ -2,9 +2,10 @@ using Aukenid.Core.Engine;
 
 namespace Aukenid.Core.Tests;
 
+[TestClass]
 public sealed class SourceCitationsTests
 {
-    [Fact]
+    [TestMethod]
     public void FromPapers_PrefersOpenAccessPdfThenDoi()
     {
         var papers = new[]
@@ -15,12 +16,12 @@ public sealed class SourceCitationsTests
         };
 
         var citations = SourceCitations.FromPapers(papers);
-        var citation = Assert.Single(citations);
-        Assert.Equal("Attention Is All You Need", citation.Title);
-        Assert.Equal("https://arxiv.org/pdf/1706.03762", citation.Url);
+        var citation = citations.Single();
+        Assert.AreEqual("Attention Is All You Need", citation.Title);
+        Assert.AreEqual("https://arxiv.org/pdf/1706.03762", citation.Url);
     }
 
-    [Fact]
+    [TestMethod]
     public void Append_AddsMarkdownLinksAndDedupesUrls()
     {
         var text = SourceCitations.Append(
@@ -30,9 +31,9 @@ public sealed class SourceCitationsTests
                 new Citation("Lima again", "https://en.wikipedia.org/wiki/Lima"),
             ]);
 
-        Assert.Contains("Here is a summary.", text);
-        Assert.Contains("**Sources**", text);
-        Assert.Contains("- [Lima](https://en.wikipedia.org/wiki/Lima)", text);
-        Assert.Equal(1, text.Split("en.wikipedia.org/wiki/Lima", StringSplitOptions.None).Length - 1);
+        Assert.IsTrue(text.Contains("Here is a summary.", StringComparison.Ordinal));
+        Assert.IsTrue(text.Contains("**Sources**", StringComparison.Ordinal));
+        Assert.IsTrue(text.Contains("- [Lima](https://en.wikipedia.org/wiki/Lima)", StringComparison.Ordinal));
+        Assert.AreEqual(1, text.Split("en.wikipedia.org/wiki/Lima", StringSplitOptions.None).Length - 1);
     }
 }

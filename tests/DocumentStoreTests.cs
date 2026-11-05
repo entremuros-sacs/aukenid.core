@@ -2,47 +2,48 @@ using Aukenid.Core.Data;
 
 namespace Aukenid.Core.Tests;
 
+[TestClass]
 public sealed class DocumentStoreTests
 {
-    [Fact]
+    [TestMethod]
     public void ReadDocument_ReturnsNullBeforeFirstSave()
     {
         using var workspace = new Workspace();
         var thread = workspace.Store.CreateThread("Notes", ConversationStore.GeneralFolder);
 
-        Assert.Null(workspace.Store.ReadDocument(thread.Id));
+        Assert.IsNull(workspace.Store.ReadDocument(thread.Id));
     }
 
-    [Fact]
+    [TestMethod]
     public void SaveDocument_ThenReadDocument_RoundTrips()
     {
         using var workspace = new Workspace();
         var thread = workspace.Store.CreateThread("Notes", ConversationStore.GeneralFolder);
 
-        Assert.True(workspace.Store.SaveDocument(thread.Id, "# Title\n\nBody text."));
+        Assert.IsTrue(workspace.Store.SaveDocument(thread.Id, "# Title\n\nBody text."));
 
-        Assert.Equal("# Title\n\nBody text.", workspace.Store.ReadDocument(thread.Id));
+        Assert.AreEqual("# Title\n\nBody text.", workspace.Store.ReadDocument(thread.Id));
     }
 
-    [Fact]
+    [TestMethod]
     public void SaveDocument_UnknownThread_ReturnsFalse()
     {
         using var workspace = new Workspace();
 
-        Assert.False(workspace.Store.SaveDocument(Guid.NewGuid().ToString(), "content"));
+        Assert.IsFalse(workspace.Store.SaveDocument(Guid.NewGuid().ToString(), "content"));
     }
 
-    [Fact]
+    [TestMethod]
     public void SnapshotDocumentVersion_WithNoDocumentYet_ReturnsNull()
     {
         using var workspace = new Workspace();
         var thread = workspace.Store.CreateThread("Notes", ConversationStore.GeneralFolder);
 
-        Assert.Null(workspace.Store.SnapshotDocumentVersion(thread.Id, "before-edit"));
-        Assert.Empty(workspace.Store.ListDocumentVersions(thread.Id));
+        Assert.IsNull(workspace.Store.SnapshotDocumentVersion(thread.Id, "before-edit"));
+        Assert.AreEqual(0, workspace.Store.ListDocumentVersions(thread.Id).Count);
     }
 
-    [Fact]
+    [TestMethod]
     public void SnapshotDocumentVersion_ListsNewestFirstAndReadsBack()
     {
         using var workspace = new Workspace();
@@ -52,17 +53,17 @@ public sealed class DocumentStoreTests
         workspace.Store.SaveDocument(thread.Id, "v2");
         var second = workspace.Store.SnapshotDocumentVersion(thread.Id, "after-edit");
 
-        Assert.NotNull(first);
-        Assert.NotNull(second);
+        Assert.IsNotNull(first);
+        Assert.IsNotNull(second);
         var versions = workspace.Store.ListDocumentVersions(thread.Id);
-        Assert.Equal(2, versions.Count);
-        Assert.Equal(second!.Id, versions[0].Id);
-        Assert.Equal("after-edit", versions[0].Label);
-        Assert.Equal(first!.Id, versions[1].Id);
-        Assert.Equal("v1", workspace.Store.ReadDocumentVersion(thread.Id, first.Id));
+        Assert.AreEqual(2, versions.Count);
+        Assert.AreEqual(second!.Id, versions[0].Id);
+        Assert.AreEqual("after-edit", versions[0].Label);
+        Assert.AreEqual(first!.Id, versions[1].Id);
+        Assert.AreEqual("v1", workspace.Store.ReadDocumentVersion(thread.Id, first.Id));
     }
 
-    [Fact]
+    [TestMethod]
     public void RestoreDocumentVersion_ReplacesCurrentAndSnapshotsItFirst()
     {
         using var workspace = new Workspace();
@@ -71,26 +72,26 @@ public sealed class DocumentStoreTests
         var first = workspace.Store.SnapshotDocumentVersion(thread.Id, "before-edit")!;
         workspace.Store.SaveDocument(thread.Id, "v2");
 
-        Assert.True(workspace.Store.RestoreDocumentVersion(thread.Id, first.Id));
+        Assert.IsTrue(workspace.Store.RestoreDocumentVersion(thread.Id, first.Id));
 
-        Assert.Equal("v1", workspace.Store.ReadDocument(thread.Id));
+        Assert.AreEqual("v1", workspace.Store.ReadDocument(thread.Id));
         var versions = workspace.Store.ListDocumentVersions(thread.Id);
-        Assert.Equal(2, versions.Count);
-        Assert.Contains(versions, v => v.Label == "before-restore");
+        Assert.AreEqual(2, versions.Count);
+        Assert.IsTrue(versions.Any(v => v.Label == "before-restore"));
     }
 
-    [Fact]
+    [TestMethod]
     public void RestoreDocumentVersion_RejectsPathTraversalId()
     {
         using var workspace = new Workspace();
         var thread = workspace.Store.CreateThread("Notes", ConversationStore.GeneralFolder);
         workspace.Store.SaveDocument(thread.Id, "v1");
 
-        Assert.False(workspace.Store.RestoreDocumentVersion(thread.Id, "../conversation"));
-        Assert.Null(workspace.Store.ReadDocumentVersion(thread.Id, "../conversation"));
+        Assert.IsFalse(workspace.Store.RestoreDocumentVersion(thread.Id, "../conversation"));
+        Assert.IsNull(workspace.Store.ReadDocumentVersion(thread.Id, "../conversation"));
     }
 
-    [Fact]
+    [TestMethod]
     public void Document_IsStoredNextToConversationFile()
     {
         using var workspace = new Workspace();
@@ -98,9 +99,9 @@ public sealed class DocumentStoreTests
         workspace.Store.SaveDocument(thread.Id, "content");
 
         var folderName = workspace.Store.GetThreadFolderName(thread.Id);
-        Assert.NotNull(folderName);
+        Assert.IsNotNull(folderName);
         var documentPath = Path.Combine(workspace.ConversationsRoot, ConversationStore.GeneralFolder, folderName!, "document.md");
-        Assert.True(File.Exists(documentPath));
+        Assert.IsTrue(File.Exists(documentPath));
     }
 
     private sealed class Workspace : IDisposable

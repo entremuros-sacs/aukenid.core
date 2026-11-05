@@ -3,9 +3,10 @@ using Aukenid.Core.Services;
 
 namespace Aukenid.Core.Tests;
 
+[TestClass]
 public sealed class ScholarTests
 {
-    [Fact]
+    [TestMethod]
     public void ParseSearchResponse_ReadsTitleTldrDoiAndPdf()
     {
         const string json = """
@@ -35,18 +36,18 @@ public sealed class ScholarTests
 
         var papers = SemanticScholarProvider.ParseSearchResponse(json, limit: 8);
 
-        var paper = Assert.Single(papers);
-        Assert.Equal("Attention Is All You Need", paper.Title);
-        Assert.Equal(2017, paper.Year);
-        Assert.Equal("Ashish Vaswani, Noam Shazeer, Niki Parmar, et al.", paper.Authors);
-        Assert.Equal("10.5555/3295222.3295349", paper.Doi);
-        Assert.Equal("We propose the Transformer.", paper.Tldr);
-        Assert.True(paper.IsOpenAccess);
-        Assert.Equal("https://arxiv.org/pdf/1706.03762", paper.PdfUrl);
-        Assert.Equal(120000, paper.CitationCount);
+        var paper = papers.Single();
+        Assert.AreEqual("Attention Is All You Need", paper.Title);
+        Assert.AreEqual(2017, paper.Year);
+        Assert.AreEqual("Ashish Vaswani, Noam Shazeer, Niki Parmar, et al.", paper.Authors);
+        Assert.AreEqual("10.5555/3295222.3295349", paper.Doi);
+        Assert.AreEqual("We propose the Transformer.", paper.Tldr);
+        Assert.IsTrue(paper.IsOpenAccess);
+        Assert.AreEqual("https://arxiv.org/pdf/1706.03762", paper.PdfUrl);
+        Assert.AreEqual(120000, paper.CitationCount);
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseOpenAlexPdfUrl_ReadsOaUrl()
     {
         const string json = """
@@ -56,10 +57,10 @@ public sealed class ScholarTests
             }
             """;
 
-        Assert.Equal("https://arxiv.org/pdf/1706.03762", SemanticScholarProvider.ParseOpenAlexPdfUrl(json));
+        Assert.AreEqual("https://arxiv.org/pdf/1706.03762", SemanticScholarProvider.ParseOpenAlexPdfUrl(json));
     }
 
-    [Fact]
+    [TestMethod]
     public void TryTurn_PrefersTldrAndIncludesDoi()
     {
         var papers = new[]
@@ -80,27 +81,27 @@ public sealed class ScholarTests
 
         var turn = ScholarContext.TryTurn(papers);
 
-        Assert.NotNull(turn);
-        Assert.Equal("system", turn.Value.Role);
-        Assert.Contains("Attention Is All You Need", turn.Value.Content);
-        Assert.Contains("We propose the Transformer.", turn.Value.Content);
-        Assert.DoesNotContain("Long abstract", turn.Value.Content);
-        Assert.Contains("10.5555/3295222.3295349", turn.Value.Content);
-        Assert.Contains("Open access", turn.Value.Content);
+        Assert.IsNotNull(turn);
+        Assert.AreEqual("system", turn.Value.Role);
+        Assert.IsTrue(turn.Value.Content.Contains("Attention Is All You Need", StringComparison.Ordinal));
+        Assert.IsTrue(turn.Value.Content.Contains("We propose the Transformer.", StringComparison.Ordinal));
+        Assert.IsFalse(turn.Value.Content.Contains("Long abstract", StringComparison.Ordinal));
+        Assert.IsTrue(turn.Value.Content.Contains("10.5555/3295222.3295349", StringComparison.Ordinal));
+        Assert.IsTrue(turn.Value.Content.Contains("Open access", StringComparison.Ordinal));
     }
 
-    [Theory]
-    [InlineData("see 10.1038/nature12373 please", "10.1038/nature12373")]
-    [InlineData("doi:10.1145/3290605.3300233", "10.1145/3290605.3300233")]
-    [InlineData("no identifier here", null)]
+    [TestMethod]
+    [DataRow("see 10.1038/nature12373 please", "10.1038/nature12373")]
+    [DataRow("doi:10.1145/3290605.3300233", "10.1145/3290605.3300233")]
+    [DataRow("no identifier here", null)]
     public void FirstDoi_ExtractsDoi(string text, string? expected)
     {
-        Assert.Equal(expected, ScholarContext.FirstDoi(text));
+        Assert.AreEqual(expected, ScholarContext.FirstDoi(text));
     }
 
-    [Fact]
+    [TestMethod]
     public void TryTurn_ReturnsNullWhenEmpty()
     {
-        Assert.Null(ScholarContext.TryTurn([]));
+        Assert.IsNull(ScholarContext.TryTurn([]));
     }
 }

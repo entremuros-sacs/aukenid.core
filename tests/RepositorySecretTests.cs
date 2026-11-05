@@ -1,8 +1,9 @@
 namespace Aukenid.Core.Tests;
 
+[TestClass]
 public sealed class RepositorySecretTests
 {
-    [Fact]
+    [TestMethod]
     public void Sources_DoNotEmbedSearchApiKeyName()
     {
         var root = Path.Combine(RepoRoot(), "src");
@@ -21,7 +22,7 @@ public sealed class RepositorySecretTests
             }
 
             var text = File.ReadAllText(file);
-            Assert.DoesNotContain("AUKENID_SEARCH_API_KEY", text, StringComparison.Ordinal);
+            Assert.IsFalse(text.Contains("AUKENID_SEARCH_API_KEY", StringComparison.Ordinal));
         }
     }
 

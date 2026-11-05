@@ -4,9 +4,10 @@ using Aukenid.Core.Engine;
 
 namespace Aukenid.Core.Tests;
 
+[TestClass]
 public sealed class ModelStoreTests
 {
-    [Fact]
+    [TestMethod]
     public void FindPath_MatchesIdFileAndUrlFileName()
     {
         var root = Path.Combine(Path.GetTempPath(), "aukenid-model-tests", Guid.NewGuid().ToString("N"));
@@ -14,10 +15,10 @@ public sealed class ModelStoreTests
         {
             var store = new ModelStore(root);
             File.WriteAllBytes(Path.Combine(root, "phi4-mini.gguf"), [1, 2, 3]);
-            Assert.Equal(Path.Combine(root, "phi4-mini.gguf"), store.FindPath("phi4-mini", "https://example.com/phi.gguf"));
+            Assert.AreEqual(Path.Combine(root, "phi4-mini.gguf"), store.FindPath("phi4-mini", "https://example.com/phi.gguf"));
 
             File.WriteAllBytes(Path.Combine(root, "Llama-3.2-3B-Instruct-Q4_K_M.gguf"), [4, 5]);
-            Assert.Equal(
+            Assert.AreEqual(
                 Path.Combine(root, "Llama-3.2-3B-Instruct-Q4_K_M.gguf"),
                 store.FindPath("llama32-3b", "https://huggingface.co/org/model/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf"));
         }
@@ -30,7 +31,7 @@ public sealed class ModelStoreTests
         }
     }
 
-    [Fact]
+    [TestMethod]
     public async Task DownloadAsync_WritesIdPrefixedGguf()
     {
         var root = Path.Combine(Path.GetTempPath(), "aukenid-model-tests", Guid.NewGuid().ToString("N"));
@@ -41,9 +42,9 @@ public sealed class ModelStoreTests
 
             var path = await store.DownloadAsync("qwen35-4b", "https://example.com/qwen.gguf", progress: null, CancellationToken.None);
 
-            Assert.Equal(Path.Combine(root, "qwen35-4b.gguf"), path);
-            Assert.Equal(payload, File.ReadAllBytes(path));
-            Assert.False(File.Exists(path + ".partial"));
+            Assert.AreEqual(Path.Combine(root, "qwen35-4b.gguf"), path);
+            CollectionAssert.AreEqual(payload, File.ReadAllBytes(path));
+            Assert.IsFalse(File.Exists(path + ".partial"));
         }
         finally
         {
@@ -54,7 +55,7 @@ public sealed class ModelStoreTests
         }
     }
 
-    [Fact]
+    [TestMethod]
     public async Task DownloadAsync_SkipsWhenAlreadyPresent()
     {
         var root = Path.Combine(Path.GetTempPath(), "aukenid-model-tests", Guid.NewGuid().ToString("N"));
@@ -67,9 +68,9 @@ public sealed class ModelStoreTests
 
             var path = await store.DownloadAsync("gemma4-e2b-it", "https://example.com/gemma.gguf", progress: null, CancellationToken.None);
 
-            Assert.Equal(existing, path);
-            Assert.Equal("old"u8.ToArray(), File.ReadAllBytes(existing));
-            Assert.Equal(0, handler.Calls);
+            Assert.AreEqual(existing, path);
+            CollectionAssert.AreEqual("old"u8.ToArray(), File.ReadAllBytes(existing));
+            Assert.AreEqual(0, handler.Calls);
         }
         finally
         {
@@ -80,7 +81,7 @@ public sealed class ModelStoreTests
         }
     }
 
-    [Fact]
+    [TestMethod]
     public async Task DownloadAsync_KeepsFileWhenHashMatches()
     {
         var root = Path.Combine(Path.GetTempPath(), "aukenid-model-tests", Guid.NewGuid().ToString("N"));
@@ -96,7 +97,7 @@ public sealed class ModelStoreTests
                 CancellationToken.None,
                 Sha256(payload));
 
-            Assert.Equal(payload, await File.ReadAllBytesAsync(path));
+            CollectionAssert.AreEqual(payload, await File.ReadAllBytesAsync(path));
         }
         finally
         {
@@ -107,7 +108,7 @@ public sealed class ModelStoreTests
         }
     }
 
-    [Fact]
+    [TestMethod]
     public async Task DownloadAsync_DeletesFileWhenHashDiffers()
     {
         var root = Path.Combine(Path.GetTempPath(), "aukenid-model-tests", Guid.NewGuid().ToString("N"));
@@ -116,15 +117,15 @@ public sealed class ModelStoreTests
             var store = new ModelStore(root, new StaticHandler("gguf-bytes"u8.ToArray()));
             var dest = Path.Combine(root, "qwen35-4b.gguf");
 
-            await Assert.ThrowsAsync<ModelHashMismatchException>(() => store.DownloadAsync(
+            await Assert.ThrowsExceptionAsync<ModelHashMismatchException>(() => store.DownloadAsync(
                 "qwen35-4b",
                 "https://example.com/qwen.gguf",
                 progress: null,
                 CancellationToken.None,
                 "sha256:" + new string('a', 64)));
 
-            Assert.False(File.Exists(dest));
-            Assert.False(File.Exists(dest + ".partial"));
+            Assert.IsFalse(File.Exists(dest));
+            Assert.IsFalse(File.Exists(dest + ".partial"));
         }
         finally
         {
@@ -135,7 +136,7 @@ public sealed class ModelStoreTests
         }
     }
 
-    [Fact]
+    [TestMethod]
     public async Task DownloadAsync_ReplacesExistingFileWhenHashDiffers()
     {
         var root = Path.Combine(Path.GetTempPath(), "aukenid-model-tests", Guid.NewGuid().ToString("N"));
@@ -154,8 +155,8 @@ public sealed class ModelStoreTests
                 CancellationToken.None,
                 Sha256(payload));
 
-            Assert.Equal(1, handler.Calls);
-            Assert.Equal(payload, await File.ReadAllBytesAsync(path));
+            Assert.AreEqual(1, handler.Calls);
+            CollectionAssert.AreEqual(payload, await File.ReadAllBytesAsync(path));
         }
         finally
         {
@@ -166,7 +167,7 @@ public sealed class ModelStoreTests
         }
     }
 
-    [Fact]
+    [TestMethod]
     public async Task DownloadAsync_RejectsMalformedHashBeforeDownload()
     {
         var root = Path.Combine(Path.GetTempPath(), "aukenid-model-tests", Guid.NewGuid().ToString("N"));
@@ -177,15 +178,15 @@ public sealed class ModelStoreTests
             var existing = Path.Combine(root, "phi4-mini.gguf");
             File.WriteAllBytes(existing, "keep"u8.ToArray());
 
-            await Assert.ThrowsAsync<ModelHashMismatchException>(() => store.DownloadAsync(
+            await Assert.ThrowsExceptionAsync<ModelHashMismatchException>(() => store.DownloadAsync(
                 "phi4-mini",
                 "https://example.com/phi.gguf",
                 progress: null,
                 CancellationToken.None,
                 "sha256:abcd"));
 
-            Assert.Equal(0, handler.Calls);
-            Assert.Equal("keep"u8.ToArray(), await File.ReadAllBytesAsync(existing));
+            Assert.AreEqual(0, handler.Calls);
+            CollectionAssert.AreEqual("keep"u8.ToArray(), await File.ReadAllBytesAsync(existing));
         }
         finally
         {

@@ -4,9 +4,10 @@ using Aukenid.Core.Services;
 
 namespace Aukenid.Core.Tests;
 
+[TestClass]
 public sealed class GroundedChatTests
 {
-    [Fact]
+    [TestMethod]
     public async Task ReplyAsync_InjectsWebHitsAndAppendsSources()
     {
         var search = new StubSearch(
@@ -29,13 +30,13 @@ public sealed class GroundedChatTests
             "Summarize https://example.com/article",
             CancellationToken.None);
 
-        Assert.True(reply.Plan.Web);
-        Assert.Contains("**Sources**", reply.Text, StringComparison.Ordinal);
-        Assert.Contains("https://example.com/article", reply.Text, StringComparison.Ordinal);
-        Assert.Equal(2, conversation.Count);
-        Assert.Equal("user", conversation[0].Role);
-        Assert.Equal("assistant", conversation[1].Role);
-        Assert.DoesNotContain(conversation, t => t.Role == "system");
+        Assert.IsTrue(reply.Plan.Web);
+        Assert.IsTrue(reply.Text.Contains("**Sources**", StringComparison.Ordinal));
+        Assert.IsTrue(reply.Text.Contains("https://example.com/article", StringComparison.Ordinal));
+        Assert.AreEqual(2, conversation.Count);
+        Assert.AreEqual("user", conversation[0].Role);
+        Assert.AreEqual("assistant", conversation[1].Role);
+        Assert.IsFalse(conversation.Any(t => t.Role == "system"));
     }
 
     private sealed class StubSearch(IReadOnlyList<WebHit> hits) : ISearchProvider

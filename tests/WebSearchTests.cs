@@ -6,9 +6,10 @@ using Aukenid.Core.Services;
 
 namespace Aukenid.Core.Tests;
 
+[TestClass]
 public sealed class WebSearchTests
 {
-    [Fact]
+    [TestMethod]
     public void ParseHits_ReadsEmbeddedTitleUrlDescription()
     {
         const string html = """
@@ -20,14 +21,14 @@ public sealed class WebSearchTests
 
         var hits = StartpageSearchProvider.ParseHits(html, limit: 8);
 
-        Assert.Equal(2, hits.Count);
-        Assert.Equal("LimaNews (@lima.news.pe) - Facebook", hits[0].Title);
-        Assert.Equal("https://www.facebook.com/lima.news.pe/", hits[0].Url);
-        Assert.Contains("Agenda cultural", hits[0].Snippet);
-        Assert.Equal("Lima - AP News", hits[1].Title);
+        Assert.AreEqual(2, hits.Count);
+        Assert.AreEqual("LimaNews (@lima.news.pe) - Facebook", hits[0].Title);
+        Assert.AreEqual("https://www.facebook.com/lima.news.pe/", hits[0].Url);
+        Assert.IsTrue(hits[0].Snippet.Contains("Agenda cultural", StringComparison.Ordinal));
+        Assert.AreEqual("Lima - AP News", hits[1].Title);
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseHits_IgnoresQueryAndAdJsonBlobs()
     {
         const string html = """
@@ -41,15 +42,15 @@ public sealed class WebSearchTests
 
         var hits = StartpageSearchProvider.ParseHits(html, limit: 8);
 
-        Assert.Equal(2, hits.Count);
-        Assert.Equal("Gemma (language model) - Wikipedia", hits[0].Title);
-        Assert.Equal("https://en.wikipedia.org/wiki/Gemma_(language_model)", hits[0].Url);
-        Assert.Equal("Gemma models overview", hits[1].Title);
-        Assert.DoesNotContain(hits, h => h.Title.Contains("cuentame", StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(hits, h => h.Title.Contains("thash", StringComparison.Ordinal));
+        Assert.AreEqual(2, hits.Count);
+        Assert.AreEqual("Gemma (language model) - Wikipedia", hits[0].Title);
+        Assert.AreEqual("https://en.wikipedia.org/wiki/Gemma_(language_model)", hits[0].Url);
+        Assert.AreEqual("Gemma models overview", hits[1].Title);
+        Assert.IsFalse(hits.Any(h => h.Title.Contains("cuentame", StringComparison.OrdinalIgnoreCase)));
+        Assert.IsFalse(hits.Any(h => h.Title.Contains("thash", StringComparison.Ordinal)));
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseHits_FallsBackToMarkupAndHonorsLimit()
     {
         const string html = """
@@ -69,23 +70,23 @@ public sealed class WebSearchTests
 
         var hits = StartpageSearchProvider.ParseHits(html, limit: 2);
 
-        Assert.Equal(2, hits.Count);
-        Assert.Equal(["One", "Two"], hits.Select(h => h.Title));
-        Assert.Equal("https://one.example/", hits[0].Url);
-        Assert.Equal("First snippet", hits[0].Snippet);
+        Assert.AreEqual(2, hits.Count);
+        CollectionAssert.AreEqual(new[] { "One", "Two" }, hits.Select(h => h.Title).ToArray());
+        Assert.AreEqual("https://one.example/", hits[0].Url);
+        Assert.AreEqual("First snippet", hits[0].Snippet);
     }
 
-    [Fact]
+    [TestMethod]
     public void SolveProofOfWork_MatchesSha256LeadingZeros()
     {
         var (nonce, hash) = StartpageSearchProvider.SolveProofOfWork("abc", 2);
 
-        Assert.StartsWith("00", hash);
+        Assert.IsTrue(hash.StartsWith("00", StringComparison.Ordinal));
         var expected = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("abc" + nonce))).ToLowerInvariant();
-        Assert.Equal(expected, hash);
+        Assert.AreEqual(expected, hash);
     }
 
-    [Fact]
+    [TestMethod]
     public void TryTurn_FormatsHitsAndFetchedPage()
     {
         var hits = new[]
@@ -95,20 +96,20 @@ public sealed class WebSearchTests
 
         var turn = WebContext.TryTurn(hits, "https://en.wikipedia.org/wiki/Football", "Football is a family of team sports.");
 
-        Assert.NotNull(turn);
-        Assert.Equal("system", turn.Value.Role);
-        Assert.Contains("Football", turn.Value.Content);
-        Assert.Contains("https://en.wikipedia.org/wiki/Football", turn.Value.Content);
-        Assert.Contains("Fetched page", turn.Value.Content);
+        Assert.IsNotNull(turn);
+        Assert.AreEqual("system", turn.Value.Role);
+        Assert.IsTrue(turn.Value.Content.Contains("Football", StringComparison.Ordinal));
+        Assert.IsTrue(turn.Value.Content.Contains("https://en.wikipedia.org/wiki/Football", StringComparison.Ordinal));
+        Assert.IsTrue(turn.Value.Content.Contains("Fetched page", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [TestMethod]
     public void TryTurn_ReturnsNullWhenEmpty()
     {
-        Assert.Null(WebContext.TryTurn([], null, null));
+        Assert.IsNull(WebContext.TryTurn([], null, null));
     }
 
-    [Fact]
+    [TestMethod]
     public void TryReadAnubisChallenge_ReadsNestedJson()
     {
         const string html = """
@@ -118,27 +119,27 @@ public sealed class WebSearchTests
             """;
 
         var challenge = StartpageSearchProvider.TryReadAnubisChallenge(html);
-        Assert.NotNull(challenge);
-        Assert.Equal("abc-id", challenge!.Id);
-        Assert.Equal("deadbeef", challenge.RandomData);
-        Assert.Equal(6, challenge.Difficulty);
+        Assert.IsNotNull(challenge);
+        Assert.AreEqual("abc-id", challenge!.Id);
+        Assert.AreEqual("deadbeef", challenge.RandomData);
+        Assert.AreEqual(6, challenge.Difficulty);
     }
 
-    [Fact]
+    [TestMethod]
     public void Diagnose_SummarizesEmptyPageWithoutDumpingHtml()
     {
         var text = StartpageSearchProvider.Diagnose(HttpStatusCode.OK, "<html></html>");
-        Assert.Contains("HTTP 200", text);
-        Assert.Contains("empty-page", text);
-        Assert.DoesNotContain("<html>", text);
+        Assert.IsTrue(text.Contains("HTTP 200", StringComparison.Ordinal));
+        Assert.IsTrue(text.Contains("empty-page", StringComparison.Ordinal));
+        Assert.IsFalse(text.Contains("<html>", StringComparison.Ordinal));
     }
 
-    [Theory]
-    [InlineData("see https://example.com/path?q=1 please", "https://example.com/path?q=1")]
-    [InlineData("no url here", null)]
-    [InlineData("(https://news.example/article).", "https://news.example/article")]
+    [TestMethod]
+    [DataRow("see https://example.com/path?q=1 please", "https://example.com/path?q=1")]
+    [DataRow("no url here", null)]
+    [DataRow("(https://news.example/article).", "https://news.example/article")]
     public void FirstPastedHttpUrl_ExtractsPublicHttpUrl(string prompt, string? expected)
     {
-        Assert.Equal(expected, WebContext.FirstPastedHttpUrl(prompt));
+        Assert.AreEqual(expected, WebContext.FirstPastedHttpUrl(prompt));
     }
 }

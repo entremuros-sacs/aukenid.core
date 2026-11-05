@@ -6,9 +6,10 @@ using Aukenid.Core.Services;
 
 namespace Aukenid.Core.Tests;
 
+[TestClass]
 public sealed class DocumentToolTests
 {
-    [Fact]
+    [TestMethod]
     public void GenerationTurns_InsertsContextBeforeLastUserTurn()
     {
         var recentTurns = new[]
@@ -20,17 +21,17 @@ public sealed class DocumentToolTests
 
         var turns = DocumentTool.GenerationTurns(recentTurns, "# Recipe\nIngredients...", []);
 
-        Assert.Equal(5, turns.Count);
-        Assert.Equal("system", turns[0].Role);
-        Assert.Equal("user", turns[1].Role);
-        Assert.Equal("assistant", turns[2].Role);
-        Assert.Equal("system", turns[3].Role);
-        Assert.Contains("Current document:", turns[3].Content);
-        Assert.Equal("user", turns[4].Role);
-        Assert.Equal("Tradúcela al francés", turns[4].Content);
+        Assert.AreEqual(5, turns.Count);
+        Assert.AreEqual("system", turns[0].Role);
+        Assert.AreEqual("user", turns[1].Role);
+        Assert.AreEqual("assistant", turns[2].Role);
+        Assert.AreEqual("system", turns[3].Role);
+        Assert.IsTrue(turns[3].Content.Contains("Current document:", StringComparison.Ordinal));
+        Assert.AreEqual("user", turns[4].Role);
+        Assert.AreEqual("Tradúcela al francés", turns[4].Content);
     }
 
-    [Fact]
+    [TestMethod]
     public void GenerationTurns_IncludesAttachmentText()
     {
         var recentTurns = new[] { new ChatTurn("user", "Traduce el archivo adjunto") };
@@ -38,21 +39,21 @@ public sealed class DocumentToolTests
 
         var turns = DocumentTool.GenerationTurns(recentTurns, null, excerpts);
 
-        var contextTurn = Assert.Single(turns, t => t.Content.Contains("overview.md"));
-        Assert.Contains("Hello world", contextTurn.Content);
+        var contextTurn = turns.Single(t => t.Content.Contains("overview.md", StringComparison.Ordinal));
+        Assert.IsTrue(contextTurn.Content.Contains("Hello world", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [TestMethod]
     public void GenerationTurns_WithNoDocumentOrAttachments_AddsNoExtraSystemTurn()
     {
         var recentTurns = new[] { new ChatTurn("user", "Escribe algo") };
 
         var turns = DocumentTool.GenerationTurns(recentTurns, null, []);
 
-        Assert.Equal(2, turns.Count);
+        Assert.AreEqual(2, turns.Count);
     }
 
-    [Fact]
+    [TestMethod]
     public void GenerationTurns_TruncatesVeryLongContext()
     {
         var recentTurns = new[] { new ChatTurn("user", "resume esto") };
@@ -60,66 +61,66 @@ public sealed class DocumentToolTests
 
         var turns = DocumentTool.GenerationTurns(recentTurns, longDoc, []);
 
-        var contextTurn = Assert.Single(turns, t => t.Content.StartsWith("Current document:"));
-        Assert.True(contextTurn.Content.Length < 20000);
-        Assert.EndsWith("\u2026", contextTurn.Content);
+        var contextTurn = turns.Single(t => t.Content.StartsWith("Current document:", StringComparison.Ordinal));
+        Assert.IsTrue(contextTurn.Content.Length < 20000);
+        Assert.IsTrue(contextTurn.Content.EndsWith("\u2026", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [TestMethod]
     public void ResolveContent_PrefersCurrentReplyWhenSubstantial()
     {
         var longReply = new string('a', 200);
 
         var resolved = DocumentTool.ResolveContent(longReply, []);
 
-        Assert.Equal(longReply, resolved);
+        Assert.AreEqual(longReply, resolved);
     }
 
-    [Fact]
+    [TestMethod]
     public void StripWholeDocumentCodeFence_UnwrapsEntireContentFence()
     {
         var wrapped = "```markdown\n# Title\n\nSome text.\n```";
 
         var stripped = DocumentTool.StripWholeDocumentCodeFence(wrapped);
 
-        Assert.Equal("# Title\n\nSome text.", stripped);
+        Assert.AreEqual("# Title\n\nSome text.", stripped);
     }
 
-    [Fact]
+    [TestMethod]
     public void StripWholeDocumentCodeFence_UnwrapsWithoutLanguageTag()
     {
         var wrapped = "```\n# Title\n\nSome text.\n```";
 
         var stripped = DocumentTool.StripWholeDocumentCodeFence(wrapped);
 
-        Assert.Equal("# Title\n\nSome text.", stripped);
+        Assert.AreEqual("# Title\n\nSome text.", stripped);
     }
 
-    [Fact]
+    [TestMethod]
     public void TryVerbatimMarkdownContent_SingleMarkdownAttachment_ReturnsRawTextUnchanged()
     {
         var excerpts = new[] { new AttachmentExcerpt("notes.md", "# Title\n\nSome text.", null) };
 
         var content = DocumentTool.TryVerbatimMarkdownContent(excerpts);
 
-        Assert.Equal("# Title\n\nSome text.", content);
+        Assert.AreEqual("# Title\n\nSome text.", content);
     }
 
-    [Fact]
+    [TestMethod]
     public void TryVerbatimMarkdownContent_NoAttachments_ReturnsNull()
     {
-        Assert.Null(DocumentTool.TryVerbatimMarkdownContent([]));
+        Assert.IsNull(DocumentTool.TryVerbatimMarkdownContent([]));
     }
 
-    [Fact]
+    [TestMethod]
     public void TryVerbatimMarkdownContent_NonMarkdownAttachment_ReturnsNull()
     {
         var excerpts = new[] { new AttachmentExcerpt("notes.txt", "Plain text.", null) };
 
-        Assert.Null(DocumentTool.TryVerbatimMarkdownContent(excerpts));
+        Assert.IsNull(DocumentTool.TryVerbatimMarkdownContent(excerpts));
     }
 
-    [Fact]
+    [TestMethod]
     public void TryVerbatimMarkdownContent_MixedMarkdownAndOtherAttachment_ReturnsNull()
     {
         var excerpts = new[]
@@ -128,10 +129,10 @@ public sealed class DocumentToolTests
             new AttachmentExcerpt("data.csv", "a,b,c", null),
         };
 
-        Assert.Null(DocumentTool.TryVerbatimMarkdownContent(excerpts));
+        Assert.IsNull(DocumentTool.TryVerbatimMarkdownContent(excerpts));
     }
 
-    [Fact]
+    [TestMethod]
     public void StripWholeDocumentCodeFence_LeavesDocumentWithItsOwnEmbeddedCodeBlockUntouched()
     {
         // A document that legitimately starts and ends with its own separate code examples must not
@@ -140,20 +141,20 @@ public sealed class DocumentToolTests
 
         var stripped = DocumentTool.StripWholeDocumentCodeFence(content);
 
-        Assert.Equal(content, stripped);
+        Assert.AreEqual(content, stripped);
     }
 
-    [Fact]
+    [TestMethod]
     public void StripWholeDocumentCodeFence_PlainContent_IsUnchanged()
     {
         var content = "# Title\n\nSome text.";
 
         var stripped = DocumentTool.StripWholeDocumentCodeFence(content);
 
-        Assert.Equal(content, stripped);
+        Assert.AreEqual(content, stripped);
     }
 
-    [Fact]
+    [TestMethod]
     public void ResolveContent_WithAttachment_PrefersSubstantialReplyOverRawAttachment()
     {
         // The reply is what synthesizes/organizes the attachment's data (e.g. a template filled in
@@ -163,10 +164,10 @@ public sealed class DocumentToolTests
 
         var resolved = DocumentTool.ResolveContent(chatReply, [], excerpts);
 
-        Assert.Equal(chatReply, resolved);
+        Assert.AreEqual(chatReply, resolved);
     }
 
-    [Fact]
+    [TestMethod]
     public void ResolveContent_WithAttachment_FallsBackToAttachmentWhenReplyIsJustAConfirmation()
     {
         var shortReply = "I've added it to the document panel.";
@@ -174,10 +175,10 @@ public sealed class DocumentToolTests
 
         var resolved = DocumentTool.ResolveContent(shortReply, [], excerpts);
 
-        Assert.Equal("Attached file content.", resolved);
+        Assert.AreEqual("Attached file content.", resolved);
     }
 
-    [Fact]
+    [TestMethod]
     public void ResolveContent_WithMultipleAttachments_CombinesWithFileHeadingsWhenReplyIsNotSubstantial()
     {
         var excerpts = new[]
@@ -188,20 +189,20 @@ public sealed class DocumentToolTests
 
         var resolved = DocumentTool.ResolveContent("short reply", [], excerpts);
 
-        Assert.Equal("## a.txt\nFirst file.\n\n## b.txt\nSecond file.", resolved);
+        Assert.AreEqual("## a.txt\nFirst file.\n\n## b.txt\nSecond file.", resolved);
     }
 
-    [Fact]
+    [TestMethod]
     public void ResolveContent_WithUnreadableAttachmentAndNoSubstantialReply_ReturnsNull()
     {
         var excerpts = new[] { new AttachmentExcerpt("scan.png", null, "attach.unreadable") };
 
         var resolved = DocumentTool.ResolveContent("short reply", [], excerpts);
 
-        Assert.Null(resolved);
+        Assert.IsNull(resolved);
     }
 
-    [Fact]
+    [TestMethod]
     public void ResolveContent_FallsBackToMostRecentSubstantialAssistantMessage()
     {
         var shortReply = "Please check the panel now.";
@@ -213,10 +214,10 @@ public sealed class DocumentToolTests
 
         var resolved = DocumentTool.ResolveContent(shortReply, priorPath);
 
-        Assert.Equal(new string('b', 300), resolved);
+        Assert.AreEqual(new string('b', 300), resolved);
     }
 
-    [Fact]
+    [TestMethod]
     public void ResolveContent_ReturnsNullWhenNothingSubstantialExists()
     {
         var shortReply = "Done.";
@@ -226,10 +227,10 @@ public sealed class DocumentToolTests
             Message("Aukenid", "short reply"),
         };
 
-        Assert.Null(DocumentTool.ResolveContent(shortReply, priorPath));
+        Assert.IsNull(DocumentTool.ResolveContent(shortReply, priorPath));
     }
 
-    [Fact]
+    [TestMethod]
     public void ResolveContent_IgnoresUserMessagesWhenSearchingBackward()
     {
         var shortReply = "Done.";
@@ -241,10 +242,10 @@ public sealed class DocumentToolTests
 
         var resolved = DocumentTool.ResolveContent(shortReply, priorPath);
 
-        Assert.Equal(new string('c', 150), resolved);
+        Assert.AreEqual(new string('c', 150), resolved);
     }
 
-    [Fact]
+    [TestMethod]
     public void Apply_WritesDocumentAndSnapshotsBeforeAndAfter()
     {
         using var workspace = new Workspace();
@@ -254,15 +255,15 @@ public sealed class DocumentToolTests
 
         var result = tool.Apply(thread.Id, new string('x', 150), [], []);
 
-        Assert.True(result.Applied);
-        Assert.Equal(new string('x', 150), workspace.Store.ReadDocument(thread.Id));
+        Assert.IsTrue(result.Applied);
+        Assert.AreEqual(new string('x', 150), workspace.Store.ReadDocument(thread.Id));
         var versions = workspace.Store.ListDocumentVersions(thread.Id);
-        Assert.Equal(2, versions.Count);
-        Assert.Contains(versions, v => v.Label == "before-edit");
-        Assert.Contains(versions, v => v.Label == "after-edit");
+        Assert.AreEqual(2, versions.Count);
+        Assert.IsTrue(versions.Any(v => v.Label == "before-edit"));
+        Assert.IsTrue(versions.Any(v => v.Label == "after-edit"));
     }
 
-    [Fact]
+    [TestMethod]
     public void Apply_ReturnsNotAppliedWhenNothingSubstantialToWrite()
     {
         using var workspace = new Workspace();
@@ -271,8 +272,8 @@ public sealed class DocumentToolTests
 
         var result = tool.Apply(thread.Id, "Done.", [], []);
 
-        Assert.False(result.Applied);
-        Assert.Null(workspace.Store.ReadDocument(thread.Id));
+        Assert.IsFalse(result.Applied);
+        Assert.IsNull(workspace.Store.ReadDocument(thread.Id));
     }
 
     private static MessageDto Message(string role, string content) =>

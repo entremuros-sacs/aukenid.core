@@ -3,9 +3,10 @@ using Aukenid.Core.Contracts;
 
 namespace Aukenid.Core.Tests;
 
+[TestClass]
 public sealed class ActivePathTests
 {
-    [Fact]
+    [TestMethod]
     public void Resolve_WalksParentLinksAndDropsSiblingBranches()
     {
         var root = Msg("u1", null, "user", "Hola");
@@ -17,10 +18,10 @@ public sealed class ActivePathTests
 
         var path = ActivePath.Resolve([root, a1, u2, a2, u2b, a2b], "u2b");
 
-        Assert.Equal(["u1", "a1", "u2b"], path.Select(m => m.Id));
+        CollectionAssert.AreEqual(new[] { "u1", "a1", "u2b" }, path.Select(m => m.Id).ToArray());
     }
 
-    [Fact]
+    [TestMethod]
     public void ToTurns_MapsAukenidRoleToAssistantAndKeepsUser()
     {
         var root = Msg("u1", null, "user", "Hola");
@@ -29,16 +30,17 @@ public sealed class ActivePathTests
 
         var turns = ActivePath.ToTurns([root, a1, u2], "u2");
 
-        Assert.Equal(
-            [
+        CollectionAssert.AreEqual(
+            new[]
+            {
                 new ChatTurn("user", "Hola"),
                 new ChatTurn("assistant", "Hola!"),
                 new ChatTurn("user", "Otra vez"),
-            ],
-            turns);
+            },
+            turns.ToArray());
     }
 
-    [Fact]
+    [TestMethod]
     public void ToTurns_StripsUiNoticeMarkerFromStoredContent()
     {
         var root = Msg("u1", null, "user", "Escribe una receta");
@@ -47,10 +49,10 @@ public sealed class ActivePathTests
 
         var turns = ActivePath.ToTurns([root, a1, u2], "u2");
 
-        Assert.Equal("Receta de ají de gallina...", turns[1].Content);
+        Assert.AreEqual("Receta de ají de gallina...", turns[1].Content);
     }
 
-    [Fact]
+    [TestMethod]
     public void ToTurns_StripsBareNoticeMarkerDownToEmptyContent()
     {
         var root = Msg("u1", null, "user", "Escribe una receta");
@@ -59,10 +61,10 @@ public sealed class ActivePathTests
 
         var turns = ActivePath.ToTurns([root, a1, u2], "u2");
 
-        Assert.Equal(string.Empty, turns[1].Content);
+        Assert.AreEqual(string.Empty, turns[1].Content);
     }
 
-    [Fact]
+    [TestMethod]
     public void Resolve_WithoutParentLinks_UsesChronologicalPrefixThroughLeaf()
     {
         var u1 = Msg("u1", null, "user", "uno");
@@ -72,16 +74,16 @@ public sealed class ActivePathTests
 
         var path = ActivePath.Resolve([u1, a1, u2, a2], "u2");
 
-        Assert.Equal(["u1", "a1", "u2"], path.Select(m => m.Id));
+        CollectionAssert.AreEqual(new[] { "u1", "a1", "u2" }, path.Select(m => m.Id).ToArray());
     }
 
-    [Fact]
+    [TestMethod]
     public void Resolve_EmptyThread_ReturnsEmpty()
     {
-        Assert.Empty(ActivePath.Resolve([], "missing"));
+        Assert.AreEqual(0, ActivePath.Resolve([], "missing").Count);
     }
 
-    [Fact]
+    [TestMethod]
     public void Resolve_UnknownLeafWithLinks_ReturnsAllMessages()
     {
         var root = Msg("u1", null, "user", "Hola");
@@ -89,7 +91,7 @@ public sealed class ActivePathTests
 
         var path = ActivePath.Resolve([root, a1], "missing");
 
-        Assert.Equal(["u1", "a1"], path.Select(m => m.Id));
+        CollectionAssert.AreEqual(new[] { "u1", "a1" }, path.Select(m => m.Id).ToArray());
     }
 
     private static MessageDto Msg(string id, string? parentId, string role, string content) =>

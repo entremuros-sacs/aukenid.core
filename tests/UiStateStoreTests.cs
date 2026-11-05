@@ -2,21 +2,22 @@ using Aukenid.Core.Data;
 
 namespace Aukenid.Core.Tests;
 
+[TestClass]
 public sealed class UiStateStoreTests
 {
-    [Fact]
+    [TestMethod]
     public void SetSelectedFolder_SurvivesReload()
     {
         var path = Path.Combine(Path.GetTempPath(), "aukenid-ui-state-tests", Guid.NewGuid().ToString("N"), "ui-state.json");
         try
         {
             var store = new UiStateStore(path);
-            Assert.Equal(ConversationStore.GeneralFolder, store.SelectedFolder);
+            Assert.AreEqual(ConversationStore.GeneralFolder, store.SelectedFolder);
 
             store.SetSelectedFolder("Work");
             var reloaded = new UiStateStore(path);
 
-            Assert.Equal("Work", reloaded.SelectedFolder);
+            Assert.AreEqual("Work", reloaded.SelectedFolder);
         }
         finally
         {
@@ -28,7 +29,7 @@ public sealed class UiStateStoreTests
         }
     }
 
-    [Fact]
+    [TestMethod]
     public void Load_IgnoresCorruptFile()
     {
         var path = Path.Combine(Path.GetTempPath(), "aukenid-ui-state-tests", Guid.NewGuid().ToString("N"), "ui-state.json");
@@ -39,7 +40,7 @@ public sealed class UiStateStoreTests
 
             var store = new UiStateStore(path);
 
-            Assert.Equal(ConversationStore.GeneralFolder, store.SelectedFolder);
+            Assert.AreEqual(ConversationStore.GeneralFolder, store.SelectedFolder);
         }
         finally
         {

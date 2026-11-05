@@ -5,37 +5,38 @@ using Aukenid.Core.Services;
 
 namespace Aukenid.Core.Tests;
 
+[TestClass]
 public sealed class AttachmentTests
 {
-    [Theory]
-    [InlineData("notes.txt")]
-    [InlineData("README.md")]
-    [InlineData("data.csv")]
-    [InlineData("config.json")]
-    [InlineData("doc.xml")]
-    [InlineData("Program.cs")]
-    [InlineData("app.js")]
-    [InlineData("main.py")]
-    [InlineData("lib.rs")]
-    [InlineData("Dockerfile")]
-    [InlineData("Makefile")]
+    [TestMethod]
+    [DataRow("notes.txt")]
+    [DataRow("README.md")]
+    [DataRow("data.csv")]
+    [DataRow("config.json")]
+    [DataRow("doc.xml")]
+    [DataRow("Program.cs")]
+    [DataRow("app.js")]
+    [DataRow("main.py")]
+    [DataRow("lib.rs")]
+    [DataRow("Dockerfile")]
+    [DataRow("Makefile")]
     public void PlainTextReader_ClaimsCommonTextAndSourceFiles(string fileName)
     {
-        Assert.True(new PlainTextAttachmentReader().CanRead(fileName));
+        Assert.IsTrue(new PlainTextAttachmentReader().CanRead(fileName));
     }
 
-    [Theory]
-    [InlineData("photo.png")]
-    [InlineData("scan.jpg")]
-    [InlineData("archive.zip")]
-    [InlineData("sheet.xlsx")]
-    [InlineData("report.docx")]
+    [TestMethod]
+    [DataRow("photo.png")]
+    [DataRow("scan.jpg")]
+    [DataRow("archive.zip")]
+    [DataRow("sheet.xlsx")]
+    [DataRow("report.docx")]
     public void PlainTextReader_RejectsBinaryOfficeAndImageFiles(string fileName)
     {
-        Assert.False(new PlainTextAttachmentReader().CanRead(fileName));
+        Assert.IsFalse(new PlainTextAttachmentReader().CanRead(fileName));
     }
 
-    [Fact]
+    [TestMethod]
     public void PlainTextReader_ExtractsUtf8Contents()
     {
         var path = Path.Combine(Path.GetTempPath(), $"aukenid-txt-{Guid.NewGuid():N}.md");
@@ -43,13 +44,13 @@ public sealed class AttachmentTests
 
         var result = new PlainTextAttachmentReader().Read(path, 4000);
 
-        Assert.True(result.Ok);
-        Assert.Contains("Hello from markdown.", result.Text);
+        Assert.IsTrue(result.Ok);
+        Assert.IsTrue(result.Text!.Contains("Hello from markdown.", StringComparison.Ordinal));
 
         File.Delete(path);
     }
 
-    [Fact]
+    [TestMethod]
     public void PlainTextReader_TruncatesToMaxChars()
     {
         var path = Path.Combine(Path.GetTempPath(), $"aukenid-txt-{Guid.NewGuid():N}.txt");
@@ -57,14 +58,14 @@ public sealed class AttachmentTests
 
         var result = new PlainTextAttachmentReader().Read(path, 20);
 
-        Assert.True(result.Ok);
-        Assert.Equal(21, result.Text!.Length);
-        Assert.EndsWith("\u2026", result.Text);
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(21, result.Text!.Length);
+        Assert.IsTrue(result.Text.EndsWith("\u2026", StringComparison.Ordinal));
 
         File.Delete(path);
     }
 
-    [Fact]
+    [TestMethod]
     public void PdfReader_ExtractsTextLayer()
     {
         var path = Path.Combine(Path.GetTempPath(), $"aukenid-pdf-{Guid.NewGuid():N}.pdf");
@@ -72,26 +73,26 @@ public sealed class AttachmentTests
 
         var result = new PdfAttachmentReader().Read(path, 4000);
 
-        Assert.True(result.Ok);
-        Assert.Contains("Hello PDF", result.Text);
+        Assert.IsTrue(result.Ok);
+        Assert.IsTrue(result.Text!.Contains("Hello PDF", StringComparison.Ordinal));
 
         File.Delete(path);
     }
 
-    [Fact]
+    [TestMethod]
     public void Registry_RoutesPdfAndTextAndRejectsUnknown()
     {
         var registry = new AttachmentReaderRegistry();
 
-        Assert.IsType<PdfAttachmentReader>(registry.ForFileName("paper.pdf"));
-        Assert.IsType<PlainTextAttachmentReader>(registry.ForFileName("main.ts"));
-        Assert.IsType<ImageAttachmentReader>(registry.ForFileName("photo.png"));
-        Assert.True(registry.IsSupported("scan.jpg"));
-        Assert.Null(registry.ForFileName("archive.zip"));
-        Assert.False(registry.IsSupported("sheet.xlsx"));
+        Assert.IsInstanceOfType(registry.ForFileName("paper.pdf"), typeof(PdfAttachmentReader));
+        Assert.IsInstanceOfType(registry.ForFileName("main.ts"), typeof(PlainTextAttachmentReader));
+        Assert.IsInstanceOfType(registry.ForFileName("photo.png"), typeof(ImageAttachmentReader));
+        Assert.IsTrue(registry.IsSupported("scan.jpg"));
+        Assert.IsNull(registry.ForFileName("archive.zip"));
+        Assert.IsFalse(registry.IsSupported("sheet.xlsx"));
     }
 
-    [Fact]
+    [TestMethod]
     public void AttachmentContext_InjectsExtractsAndNotesUnsupported()
     {
         var turn = AttachmentContext.TryTurn(
@@ -100,15 +101,15 @@ public sealed class AttachmentTests
             new AttachmentExcerpt("photo.png", null, "attach.unsupported"),
         ]);
 
-        Assert.NotNull(turn);
-        Assert.Equal("system", turn.Value.Role);
-        Assert.Contains("notes.md", turn.Value.Content);
-        Assert.Contains("buy milk", turn.Value.Content);
-        Assert.Contains("photo.png", turn.Value.Content);
-        Assert.Contains("format not supported", turn.Value.Content);
+        Assert.IsNotNull(turn);
+        Assert.AreEqual("system", turn.Value.Role);
+        Assert.IsTrue(turn.Value.Content.Contains("notes.md", StringComparison.Ordinal));
+        Assert.IsTrue(turn.Value.Content.Contains("buy milk", StringComparison.Ordinal));
+        Assert.IsTrue(turn.Value.Content.Contains("photo.png", StringComparison.Ordinal));
+        Assert.IsTrue(turn.Value.Content.Contains("format not supported", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [TestMethod]
     public void AttachmentContext_CapsTotalCharacters()
     {
         var turn = AttachmentContext.TryTurn(
@@ -116,13 +117,13 @@ public sealed class AttachmentTests
             new AttachmentExcerpt("big.txt", new string('x', 400), null),
         ], maxTotalChars: 200);
 
-        Assert.NotNull(turn);
-        Assert.True(turn.Value.Content.Length <= 201);
-        Assert.Contains('\u2026', turn.Value.Content);
-        Assert.DoesNotContain(new string('x', 400), turn.Value.Content);
+        Assert.IsNotNull(turn);
+        Assert.IsTrue(turn.Value.Content.Length <= 201);
+        Assert.IsTrue(turn.Value.Content.Contains('\u2026'));
+        Assert.IsFalse(turn.Value.Content.Contains(new string('x', 400), StringComparison.Ordinal));
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationMarkdown_RoundTripsAttachmentNames()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-md-{Guid.NewGuid():N}");
@@ -141,13 +142,13 @@ public sealed class AttachmentTests
         File.WriteAllText(file, ConversationMarkdown.BuildHeader(thread) + ConversationMarkdown.FormatMessageBlock(message));
         var read = ConversationMarkdown.ReadMessages(file, "t1");
 
-        Assert.Single(read);
-        Assert.Equal(["report one.pdf", "notes.md"], read[0].Attachments);
+        Assert.AreEqual(1, read.Count);
+        CollectionAssert.AreEqual(new[] { "report one.pdf", "notes.md" }, read[0].Attachments!.ToArray());
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_CopiesAttachmentIntoThreadFolder()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-att-{Guid.NewGuid():N}");
@@ -158,17 +159,17 @@ public sealed class AttachmentTests
 
         var stored = store.SaveAttachment(thread.Id, source);
 
-        Assert.Equal(Path.GetFileName(source), stored);
+        Assert.AreEqual(Path.GetFileName(source), stored);
         var dest = store.TryGetAttachmentPath(thread.Id, stored!);
-        Assert.NotNull(dest);
-        Assert.StartsWith(store.GetAttachmentsDirectory(thread.Id)!, dest);
-        Assert.Equal("hello", File.ReadAllText(dest));
+        Assert.IsNotNull(dest);
+        Assert.IsTrue(dest.StartsWith(store.GetAttachmentsDirectory(thread.Id)!, StringComparison.Ordinal));
+        Assert.AreEqual("hello", File.ReadAllText(dest));
 
         File.Delete(source);
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_SavesAttachmentsForTemporalThreads()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-att-{Guid.NewGuid():N}");
@@ -180,18 +181,18 @@ public sealed class AttachmentTests
         var stored = store.SaveAttachment(thread.Id, source);
         var dest = store.TryGetAttachmentPath(thread.Id, stored!);
 
-        Assert.NotNull(stored);
-        Assert.NotNull(dest);
-        Assert.Equal("scratch", File.ReadAllText(dest!));
+        Assert.IsNotNull(stored);
+        Assert.IsNotNull(dest);
+        Assert.AreEqual("scratch", File.ReadAllText(dest!));
 
         store.DeleteThread(thread.Id);
-        Assert.Null(store.TryGetAttachmentPath(thread.Id, stored!));
+        Assert.IsNull(store.TryGetAttachmentPath(thread.Id, stored!));
 
         File.Delete(source);
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_MovingTemporalThreadKeepsAttachments()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-att-{Guid.NewGuid():N}");
@@ -204,27 +205,27 @@ public sealed class AttachmentTests
         store.MoveThread(thread.Id, ConversationStore.GeneralFolder);
 
         var dest = store.TryGetAttachmentPath(thread.Id, stored!);
-        Assert.NotNull(dest);
-        Assert.Equal("keep me", File.ReadAllText(dest!));
-        Assert.Contains(Path.Combine(root, ConversationStore.GeneralFolder), dest);
+        Assert.IsNotNull(dest);
+        Assert.AreEqual("keep me", File.ReadAllText(dest!));
+        Assert.IsTrue(dest.Contains(Path.Combine(root, ConversationStore.GeneralFolder), StringComparison.Ordinal));
 
         File.Delete(source);
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_RejectsPathTraversalInStoredName()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-att-{Guid.NewGuid():N}");
         var store = new ConversationStore(root);
         var thread = store.CreateThread("Test", ConversationStore.GeneralFolder);
 
-        Assert.Null(store.TryGetAttachmentPath(thread.Id, "../secret.txt"));
+        Assert.IsNull(store.TryGetAttachmentPath(thread.Id, "../secret.txt"));
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void LayoutText_ReadsColumnsBeforeTheNeighbor()
     {
         var text = LayoutText.Format(
@@ -237,10 +238,10 @@ public sealed class AttachmentTests
 
         var leftFollows = text.IndexOf("continues with another", StringComparison.Ordinal);
         var rightStarts = text.IndexOf("right column starts", StringComparison.Ordinal);
-        Assert.True(leftFollows >= 0 && rightStarts > leftFollows);
+        Assert.IsTrue(leftFollows >= 0 && rightStarts > leftFollows);
     }
 
-    [Fact]
+    [TestMethod]
     public void LayoutText_KeepsATableOnTheSameRow()
     {
         var text = LayoutText.Format(
@@ -252,11 +253,11 @@ public sealed class AttachmentTests
         ]);
 
         var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        Assert.Contains(lines, line => line.Contains("Name", StringComparison.Ordinal) && line.Contains("Age", StringComparison.Ordinal));
-        Assert.Contains(lines, line => line.Contains("Ada", StringComparison.Ordinal) && line.Contains("36", StringComparison.Ordinal));
+        Assert.IsTrue(lines.Any(line => line.Contains("Name", StringComparison.Ordinal) && line.Contains("Age", StringComparison.Ordinal)));
+        Assert.IsTrue(lines.Any(line => line.Contains("Ada", StringComparison.Ordinal) && line.Contains("36", StringComparison.Ordinal)));
     }
 
-    [Fact]
+    [TestMethod]
     public void LayoutText_SeparatesRegionsAndPages()
     {
         var text = LayoutText.Format(
@@ -266,11 +267,11 @@ public sealed class AttachmentTests
             new PlacedWord(2, "Next page.", 0.08f, 0.10f, 0.30f, 0.03f),
         ]);
 
-        Assert.Contains("First region of the note.\n\nSecond region", text, StringComparison.Ordinal);
-        Assert.Contains("--- page 2 ---", text, StringComparison.Ordinal);
+        Assert.IsTrue(text.Contains("First region of the note.\n\nSecond region", StringComparison.Ordinal));
+        Assert.IsTrue(text.Contains("--- page 2 ---", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [TestMethod]
     public void Tesseract_ReadsTextDrawnInAPng()
     {
         var trained = Path.Combine(AppContext.BaseDirectory, "tessdata", "eng.traineddata");
@@ -344,13 +345,13 @@ public sealed class AttachmentTests
             process.Start();
             var error = process.StandardError.ReadToEnd();
             process.WaitForExit();
-            Assert.True(process.ExitCode == 0 && File.Exists(png), error);
+            Assert.IsTrue(process.ExitCode == 0 && File.Exists(png), error);
 
             var result = new ImageAttachmentReader().Read(png, 4000);
 
-            Assert.True(result.Ok, result.ErrorKey);
-            Assert.Contains("Hola", result.Text, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("OCR", result.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.IsTrue(result.Ok, result.ErrorKey);
+            Assert.IsTrue(result.Text!.Contains("Hola", StringComparison.OrdinalIgnoreCase));
+            Assert.IsTrue(result.Text!.Contains("OCR", StringComparison.OrdinalIgnoreCase));
 
             var pdf = Path.Combine(Path.GetTempPath(), $"aukenid-ocr-{Guid.NewGuid():N}.pdf");
             var wrap = Path.Combine(Path.GetTempPath(), $"aukenid-ocr-{Guid.NewGuid():N}.swift");
@@ -382,11 +383,11 @@ public sealed class AttachmentTests
                 wrapped.Start();
                 var wrapError = wrapped.StandardError.ReadToEnd();
                 wrapped.WaitForExit();
-                Assert.True(wrapped.ExitCode == 0 && File.Exists(pdf), wrapError);
+                Assert.IsTrue(wrapped.ExitCode == 0 && File.Exists(pdf), wrapError);
 
                 var scanned = new PdfAttachmentReader().Read(pdf, 4000);
-                Assert.True(scanned.Ok, scanned.ErrorKey);
-                Assert.Contains("Hola", scanned.Text, StringComparison.OrdinalIgnoreCase);
+                Assert.IsTrue(scanned.Ok, scanned.ErrorKey);
+                Assert.IsTrue(scanned.Text!.Contains("Hola", StringComparison.OrdinalIgnoreCase));
             }
             finally
             {

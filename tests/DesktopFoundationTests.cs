@@ -4,20 +4,21 @@ using Aukenid.Core.Contracts;
 
 namespace Aukenid.Core.Tests;
 
+[TestClass]
 public sealed class DesktopFoundationTests
 {
-    [Theory]
-    [InlineData("localhost", true)]
-    [InlineData("127.0.0.1", true)]
-    [InlineData("192.168.1.100", true)]
-    [InlineData("8.8.8.8", false)]
-    [InlineData("example.com", false)]
+    [TestMethod]
+    [DataRow("localhost", true)]
+    [DataRow("127.0.0.1", true)]
+    [DataRow("192.168.1.100", true)]
+    [DataRow("8.8.8.8", false)]
+    [DataRow("example.com", false)]
     public void IsBlockedHost_RecognizesPrivateAndPublicHosts(string host, bool expected)
     {
-        Assert.Equal(expected, WebFetchService.IsBlockedHost(host));
+        Assert.AreEqual(expected, WebFetchService.IsBlockedHost(host));
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_PersistsTreeMessagesAsMarkdownFiles()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -33,17 +34,17 @@ public sealed class DesktopFoundationTests
 
         var messages = store.ListMessages(thread.Id);
 
-        Assert.Equal(2, messages.Count);
-        Assert.Equal(user.Id, messages[0].Id);
-        Assert.Equal(user.Id, messages[1].ParentId);
+        Assert.AreEqual(2, messages.Count);
+        Assert.AreEqual(user.Id, messages[0].Id);
+        Assert.AreEqual(user.Id, messages[1].ParentId);
 
         var files = Directory.GetFiles(Path.Combine(root, ConversationStore.GeneralFolder), "conversation.md", SearchOption.AllDirectories);
-        Assert.Single(files);
+        Assert.AreEqual(1, files.Length);
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_GivesEachThreadItsOwnFolderWithAttachmentsSubfolder()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -53,17 +54,17 @@ public sealed class DesktopFoundationTests
 
         var attachmentsDir = store.GetAttachmentsDirectory(thread.Id);
 
-        Assert.NotNull(attachmentsDir);
-        Assert.True(Directory.Exists(attachmentsDir));
-        Assert.Equal(Path.Combine(root, ConversationStore.GeneralFolder, "Test", "attachments"), attachmentsDir);
+        Assert.IsNotNull(attachmentsDir);
+        Assert.IsTrue(Directory.Exists(attachmentsDir));
+        Assert.AreEqual(Path.Combine(root, ConversationStore.GeneralFolder, "Test", "attachments"), attachmentsDir);
 
         // The thread's own folder must not surface as a user-facing folder in the tree.
-        Assert.DoesNotContain(store.ListFolders(), f => f.Path == $"{ConversationStore.GeneralFolder}/Test");
+        Assert.IsFalse(store.ListFolders().Any(f => f.Path == $"{ConversationStore.GeneralFolder}/Test"));
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_GetThreadFolderNameReflectsDirectoryNotRenamedTitle()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -74,12 +75,12 @@ public sealed class DesktopFoundationTests
         // Renaming only updates the title inside conversation.md, not the on-disk folder name.
         store.RenameThread(thread.Id, "Derived from first prompt");
 
-        Assert.Equal("New conversation", store.GetThreadFolderName(thread.Id));
+        Assert.AreEqual("New conversation", store.GetThreadFolderName(thread.Id));
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_GetThreadFolderNameReturnsNullForTemporalThreads()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -87,12 +88,12 @@ public sealed class DesktopFoundationTests
         var store = new ConversationStore(root);
         var thread = store.CreateThread("Scratch", ConversationStore.TemporalFolder);
 
-        Assert.Null(store.GetThreadFolderName(thread.Id));
+        Assert.IsNull(store.GetThreadFolderName(thread.Id));
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_DeletingThreadDirectoryRemovesConversationAndAttachments()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -105,12 +106,12 @@ public sealed class DesktopFoundationTests
         var threadDir = Path.Combine(root, ConversationStore.GeneralFolder, "Test");
         Directory.Delete(threadDir, recursive: true);
 
-        Assert.False(Directory.Exists(threadDir));
+        Assert.IsFalse(Directory.Exists(threadDir));
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_TemporalThreadsAreNotPersistedToDisk()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -119,15 +120,15 @@ public sealed class DesktopFoundationTests
         var thread = store.CreateThread("Scratch", ConversationStore.TemporalFolder);
         store.SaveMessage(new MessageDto(Guid.CreateVersion7().ToString(), thread.Id, null, "user", "Hi", DateTimeOffset.UtcNow));
 
-        Assert.Single(store.ListMessages(thread.Id));
+        Assert.AreEqual(1, store.ListMessages(thread.Id).Count);
 
         var temporalDir = Path.Combine(root, ConversationStore.TemporalFolder);
-        Assert.False(Directory.Exists(temporalDir));
+        Assert.IsFalse(Directory.Exists(temporalDir));
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_MoveExchangeToNewThreadRelocatesTheTriggeringTurnOnly()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -145,24 +146,24 @@ public sealed class DesktopFoundationTests
 
         var result = store.MoveExchangeToNewThread(thread.Id, secondUser.Id, "New conversation");
 
-        Assert.NotNull(result);
+        Assert.IsNotNull(result);
         var (newThread, movedMessages) = result!.Value;
-        Assert.Equal(ConversationStore.GeneralFolder, newThread.FolderPath);
-        Assert.Equal(2, movedMessages.Count);
+        Assert.AreEqual(ConversationStore.GeneralFolder, newThread.FolderPath);
+        Assert.AreEqual(2, movedMessages.Count);
 
         var remaining = store.ListMessages(thread.Id);
-        Assert.Equal(2, remaining.Count);
-        Assert.DoesNotContain(remaining, m => m.Id == secondUser.Id || m.Id == secondReply.Id);
+        Assert.AreEqual(2, remaining.Count);
+        Assert.IsFalse(remaining.Any(m => m.Id == secondUser.Id || m.Id == secondReply.Id));
 
         var movedInNewThread = store.ListMessages(newThread.Id);
-        Assert.Equal(2, movedInNewThread.Count);
-        Assert.Contains(movedInNewThread, m => m.Id == secondUser.Id && m.ParentId == null);
-        Assert.Contains(movedInNewThread, m => m.Id == secondReply.Id && m.ParentId == secondUser.Id);
+        Assert.AreEqual(2, movedInNewThread.Count);
+        Assert.IsTrue(movedInNewThread.Any(m => m.Id == secondUser.Id && m.ParentId == null));
+        Assert.IsTrue(movedInNewThread.Any(m => m.Id == secondReply.Id && m.ParentId == secondUser.Id));
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_MoveExchangeToNewThreadRelocatesAttachmentFiles()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -178,16 +179,16 @@ public sealed class DesktopFoundationTests
 
         var result = store.MoveExchangeToNewThread(thread.Id, user.Id, "New conversation");
 
-        Assert.NotNull(result);
+        Assert.IsNotNull(result);
         var newThread = result!.Value.Thread;
-        Assert.Null(store.TryGetAttachmentPath(thread.Id, storedName));
-        Assert.NotNull(store.TryGetAttachmentPath(newThread.Id, storedName));
+        Assert.IsNull(store.TryGetAttachmentPath(thread.Id, storedName));
+        Assert.IsNotNull(store.TryGetAttachmentPath(newThread.Id, storedName));
 
         File.Delete(sourceFile);
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_MoveExchangeToNewThreadWorksForTemporalThreads()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -199,15 +200,15 @@ public sealed class DesktopFoundationTests
 
         var result = store.MoveExchangeToNewThread(thread.Id, user.Id, "New conversation");
 
-        Assert.NotNull(result);
-        Assert.Equal(ConversationStore.TemporalFolder, result!.Value.Thread.FolderPath);
-        Assert.Empty(store.ListMessages(thread.Id));
-        Assert.Single(store.ListMessages(result.Value.Thread.Id));
+        Assert.IsNotNull(result);
+        Assert.AreEqual(ConversationStore.TemporalFolder, result!.Value.Thread.FolderPath);
+        Assert.AreEqual(0, store.ListMessages(thread.Id).Count);
+        Assert.AreEqual(1, store.ListMessages(result.Value.Thread.Id).Count);
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_MoveExchangeToNewThreadReturnsNullWhenMessageIsMissing()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -215,12 +216,12 @@ public sealed class DesktopFoundationTests
         var store = new ConversationStore(root);
         var thread = store.CreateThread("Work", ConversationStore.GeneralFolder);
 
-        Assert.Null(store.MoveExchangeToNewThread(thread.Id, "missing-id", "New conversation"));
+        Assert.IsNull(store.MoveExchangeToNewThread(thread.Id, "missing-id", "New conversation"));
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_SplitThreadWithHistoryCopiesThePrefixAndLeavesTheOriginalUntouched()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -236,22 +237,22 @@ public sealed class DesktopFoundationTests
 
         var result = store.SplitThread(thread.Id, reply1.Id, "Split", includeHistory: true, removeFromSource: false);
 
-        Assert.NotNull(result);
+        Assert.IsNotNull(result);
         var (newThread, movedMessages) = result!.Value;
-        Assert.Equal(ConversationStore.GeneralFolder, newThread.FolderPath);
-        Assert.Equal(2, movedMessages.Count);
-        Assert.Equal(root1.Content, movedMessages[0].Content);
-        Assert.Null(movedMessages[0].ParentId);
-        Assert.Equal(reply1.Content, movedMessages[1].Content);
-        Assert.Equal(movedMessages[0].Id, movedMessages[1].ParentId);
+        Assert.AreEqual(ConversationStore.GeneralFolder, newThread.FolderPath);
+        Assert.AreEqual(2, movedMessages.Count);
+        Assert.AreEqual(root1.Content, movedMessages[0].Content);
+        Assert.IsNull(movedMessages[0].ParentId);
+        Assert.AreEqual(reply1.Content, movedMessages[1].Content);
+        Assert.AreEqual(movedMessages[0].Id, movedMessages[1].ParentId);
 
         // The original thread keeps everything, including the message split from (M).
-        Assert.Equal(3, store.ListMessages(thread.Id).Count);
+        Assert.AreEqual(3, store.ListMessages(thread.Id).Count);
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_SplitThreadWithoutHistoryMatchesMoveExchange()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -265,14 +266,14 @@ public sealed class DesktopFoundationTests
 
         var result = store.SplitThread(thread.Id, user.Id, "New conversation", includeHistory: false, removeFromSource: true);
 
-        Assert.NotNull(result);
-        Assert.Equal(2, result!.Value.Messages.Count);
-        Assert.Empty(store.ListMessages(thread.Id));
+        Assert.IsNotNull(result);
+        Assert.AreEqual(2, result!.Value.Messages.Count);
+        Assert.AreEqual(0, store.ListMessages(thread.Id).Count);
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_SplitThreadReturnsNullWhenMessageIsMissing()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -280,12 +281,12 @@ public sealed class DesktopFoundationTests
         var store = new ConversationStore(root);
         var thread = store.CreateThread("Work", ConversationStore.GeneralFolder);
 
-        Assert.Null(store.SplitThread(thread.Id, "missing-id", "Split", includeHistory: true, removeFromSource: false));
+        Assert.IsNull(store.SplitThread(thread.Id, "missing-id", "Split", includeHistory: true, removeFromSource: false));
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_PruneThreadKeepsOnlyTheActivePathUpToTheMessage()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -303,18 +304,18 @@ public sealed class DesktopFoundationTests
 
         var remaining = store.PruneThread(thread.Id, reply1.Id);
 
-        Assert.NotNull(remaining);
-        Assert.Equal(2, remaining!.Count);
-        Assert.Equal([root1.Id, reply1.Id], remaining.Select(m => m.Id));
+        Assert.IsNotNull(remaining);
+        Assert.AreEqual(2, remaining!.Count);
+        CollectionAssert.AreEqual(new[] { root1.Id, reply1.Id }, remaining.Select(m => m.Id).ToArray());
 
         var persisted = store.ListMessages(thread.Id);
-        Assert.Equal(2, persisted.Count);
-        Assert.DoesNotContain(persisted, m => m.Id == root2.Id || m.Id == reply2.Id);
+        Assert.AreEqual(2, persisted.Count);
+        Assert.IsFalse(persisted.Any(m => m.Id == root2.Id || m.Id == reply2.Id));
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_PruneThreadDeletesAttachmentsThatOnlyBelongedToDiscardedMessages()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -332,13 +333,13 @@ public sealed class DesktopFoundationTests
 
         store.PruneThread(thread.Id, user.Id);
 
-        Assert.Null(store.TryGetAttachmentPath(thread.Id, storedName));
+        Assert.IsNull(store.TryGetAttachmentPath(thread.Id, storedName));
 
         File.Delete(sourceFile);
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_PruneThreadReturnsNullWhenMessageIsMissing()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -346,12 +347,12 @@ public sealed class DesktopFoundationTests
         var store = new ConversationStore(root);
         var thread = store.CreateThread("Work", ConversationStore.GeneralFolder);
 
-        Assert.Null(store.PruneThread(thread.Id, "missing-id"));
+        Assert.IsNull(store.PruneThread(thread.Id, "missing-id"));
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_RenameThreadUpdatesPersistedTitle()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -362,12 +363,12 @@ public sealed class DesktopFoundationTests
         store.RenameThread(thread.Id, "Derived from first prompt");
 
         var renamed = store.ListThreads().Single(t => t.Id == thread.Id);
-        Assert.Equal("Derived from first prompt", renamed.Title);
+        Assert.AreEqual("Derived from first prompt", renamed.Title);
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_RenameThreadWorksForTemporalThreads()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -378,12 +379,12 @@ public sealed class DesktopFoundationTests
         store.RenameThread(thread.Id, "Derived from first prompt");
 
         var renamed = store.ListThreads().Single(t => t.Id == thread.Id);
-        Assert.Equal("Derived from first prompt", renamed.Title);
+        Assert.AreEqual("Derived from first prompt", renamed.Title);
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_DeleteThreadRemovesPersistedThread()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -394,13 +395,13 @@ public sealed class DesktopFoundationTests
 
         store.DeleteThread(thread.Id);
 
-        Assert.False(Directory.Exists(threadDir));
-        Assert.DoesNotContain(store.ListThreads(), t => t.Id == thread.Id);
+        Assert.IsFalse(Directory.Exists(threadDir));
+        Assert.IsFalse(store.ListThreads().Any(t => t.Id == thread.Id));
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_DeleteThreadRemovesTemporalThread()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -410,12 +411,12 @@ public sealed class DesktopFoundationTests
 
         store.DeleteThread(thread.Id);
 
-        Assert.DoesNotContain(store.ListThreads(), t => t.Id == thread.Id);
+        Assert.IsFalse(store.ListThreads().Any(t => t.Id == thread.Id));
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_MoveThreadBetweenPersistedFoldersPreservesMessages()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -428,13 +429,13 @@ public sealed class DesktopFoundationTests
         store.MoveThread(thread.Id, folder.Path);
 
         var moved = store.ListThreads().Single(t => t.Id == thread.Id);
-        Assert.Equal(folder.Path, moved.FolderPath);
-        Assert.Single(store.ListMessages(thread.Id));
+        Assert.AreEqual(folder.Path, moved.FolderPath);
+        Assert.AreEqual(1, store.ListMessages(thread.Id).Count);
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_MoveThreadIntoAndOutOfTemporalPreservesMessages()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -445,18 +446,18 @@ public sealed class DesktopFoundationTests
 
         store.MoveThread(thread.Id, ConversationStore.TemporalFolder);
         var temporal = store.ListThreads().Single(t => t.Id == thread.Id);
-        Assert.Equal(ConversationStore.TemporalFolder, temporal.FolderPath);
-        Assert.Single(store.ListMessages(thread.Id));
+        Assert.AreEqual(ConversationStore.TemporalFolder, temporal.FolderPath);
+        Assert.AreEqual(1, store.ListMessages(thread.Id).Count);
 
         store.MoveThread(thread.Id, ConversationStore.GeneralFolder);
         var persisted = store.ListThreads().Single(t => t.Id == thread.Id);
-        Assert.Equal(ConversationStore.GeneralFolder, persisted.FolderPath);
-        Assert.Single(store.ListMessages(thread.Id));
+        Assert.AreEqual(ConversationStore.GeneralFolder, persisted.FolderPath);
+        Assert.AreEqual(1, store.ListMessages(thread.Id).Count);
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_RenameFolderMovesDirectoryAndUpdatesThreadPaths()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -467,27 +468,27 @@ public sealed class DesktopFoundationTests
 
         var renamed = store.RenameFolder(folder.Path, "Projects");
 
-        Assert.NotNull(renamed);
-        Assert.Equal("Projects", renamed!.Name);
-        Assert.Equal("Projects", store.ListThreads().Single(t => t.Id == thread.Id).FolderPath);
+        Assert.IsNotNull(renamed);
+        Assert.AreEqual("Projects", renamed!.Name);
+        Assert.AreEqual("Projects", store.ListThreads().Single(t => t.Id == thread.Id).FolderPath);
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_RenameFolderRejectsStandardFolders()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
 
         var store = new ConversationStore(root);
 
-        Assert.Null(store.RenameFolder(ConversationStore.GeneralFolder, "Whatever"));
-        Assert.Null(store.RenameFolder(ConversationStore.TemporalFolder, "Whatever"));
+        Assert.IsNull(store.RenameFolder(ConversationStore.GeneralFolder, "Whatever"));
+        Assert.IsNull(store.RenameFolder(ConversationStore.TemporalFolder, "Whatever"));
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_DeleteFolderRemovesFolderAndItsThreads()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -498,14 +499,14 @@ public sealed class DesktopFoundationTests
 
         store.DeleteFolder(folder.Path);
 
-        Assert.DoesNotContain(store.ListFolders(), f => f.Path == folder.Path);
-        Assert.DoesNotContain(store.ListThreads(), t => t.Id == thread.Id);
-        Assert.False(Directory.Exists(Path.Combine(root, "Work")));
+        Assert.IsFalse(store.ListFolders().Any(f => f.Path == folder.Path));
+        Assert.IsFalse(store.ListThreads().Any(t => t.Id == thread.Id));
+        Assert.IsFalse(Directory.Exists(Path.Combine(root, "Work")));
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_EmptyFolderDeletesThreadsButKeepsFolder()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -516,13 +517,13 @@ public sealed class DesktopFoundationTests
 
         store.EmptyFolder(folder.Path);
 
-        Assert.Contains(store.ListFolders(), f => f.Path == folder.Path);
-        Assert.DoesNotContain(store.ListThreads(), t => t.Id == thread.Id);
+        Assert.IsTrue(store.ListFolders().Any(f => f.Path == folder.Path));
+        Assert.IsFalse(store.ListThreads().Any(t => t.Id == thread.Id));
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_MergeFolderMovesThreadsAndDeletesEmptySourceFolder()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -534,13 +535,13 @@ public sealed class DesktopFoundationTests
 
         store.MergeFolder(source.Path, target.Path);
 
-        Assert.Equal(target.Path, store.ListThreads().Single(t => t.Id == thread.Id).FolderPath);
-        Assert.DoesNotContain(store.ListFolders(), f => f.Path == source.Path);
+        Assert.AreEqual(target.Path, store.ListThreads().Single(t => t.Id == thread.Id).FolderPath);
+        Assert.IsFalse(store.ListFolders().Any(f => f.Path == source.Path));
 
         Directory.Delete(root, recursive: true);
     }
 
-    [Fact]
+    [TestMethod]
     public void ConversationStore_MergeFolderKeepsGeneralAndTemporalAfterMerging()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-test-{Guid.NewGuid():N}");
@@ -551,8 +552,8 @@ public sealed class DesktopFoundationTests
 
         store.MergeFolder(ConversationStore.GeneralFolder, target.Path);
 
-        Assert.Equal(target.Path, store.ListThreads().Single(t => t.Id == thread.Id).FolderPath);
-        Assert.Contains(store.ListFolders(), f => f.Path == ConversationStore.GeneralFolder);
+        Assert.AreEqual(target.Path, store.ListThreads().Single(t => t.Id == thread.Id).FolderPath);
+        Assert.IsTrue(store.ListFolders().Any(f => f.Path == ConversationStore.GeneralFolder));
 
         Directory.Delete(root, recursive: true);
     }

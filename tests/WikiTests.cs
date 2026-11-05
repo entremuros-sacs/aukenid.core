@@ -3,9 +3,10 @@ using Aukenid.Core.Services;
 
 namespace Aukenid.Core.Tests;
 
+[TestClass]
 public sealed class WikiTests
 {
-    [Fact]
+    [TestMethod]
     public void ParseSearchResponse_ReadsTitleAndStripsSnippetHtml()
     {
         const string json = """
@@ -21,12 +22,12 @@ public sealed class WikiTests
 
         var hits = WikipediaProvider.ParseSearchResponse(json, limit: 1);
 
-        var hit = Assert.Single(hits);
-        Assert.Equal("Lima", hit.Title);
-        Assert.Equal("Lima is the capital of Peru.", hit.Snippet);
+        var hit = hits.Single();
+        Assert.AreEqual("Lima", hit.Title);
+        Assert.AreEqual("Lima is the capital of Peru.", hit.Snippet);
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseExtractsResponse_ReadsExtractUrlAndWikidataId()
     {
         const string json = """
@@ -44,14 +45,14 @@ public sealed class WikiTests
             }
             """;
 
-        var article = Assert.Single(WikipediaProvider.ParseExtractsResponse(json));
-        Assert.Equal("Lima", article.Title);
-        Assert.Equal("https://en.wikipedia.org/wiki/Lima", article.Url);
-        Assert.Contains("capital", article.Extract);
-        Assert.Equal("Q2868", article.WikidataId);
+        var article = WikipediaProvider.ParseExtractsResponse(json).Single();
+        Assert.AreEqual("Lima", article.Title);
+        Assert.AreEqual("https://en.wikipedia.org/wiki/Lima", article.Url);
+        Assert.IsTrue(article.Extract.Contains("capital", StringComparison.Ordinal));
+        Assert.AreEqual("Q2868", article.WikidataId);
     }
 
-    [Fact]
+    [TestMethod]
     public void ParseWikidataDescription_ReadsEnglish()
     {
         const string json = """
@@ -66,10 +67,10 @@ public sealed class WikiTests
             }
             """;
 
-        Assert.Equal("capital of Peru", WikipediaProvider.ParseWikidataDescription(json, "Q2868"));
+        Assert.AreEqual("capital of Peru", WikipediaProvider.ParseWikidataDescription(json, "Q2868"));
     }
 
-    [Fact]
+    [TestMethod]
     public void TryTurn_IncludesTitleUrlAndExtract()
     {
         var articles = new[]
@@ -79,17 +80,17 @@ public sealed class WikiTests
 
         var turn = WikiContext.TryTurn(articles);
 
-        Assert.NotNull(turn);
-        Assert.Equal("system", turn.Value.Role);
-        Assert.Contains("Lima", turn.Value.Content);
-        Assert.Contains("https://en.wikipedia.org/wiki/Lima", turn.Value.Content);
-        Assert.Contains("capital of Peru", turn.Value.Content);
-        Assert.Contains("Q2868", turn.Value.Content);
+        Assert.IsNotNull(turn);
+        Assert.AreEqual("system", turn.Value.Role);
+        Assert.IsTrue(turn.Value.Content.Contains("Lima", StringComparison.Ordinal));
+        Assert.IsTrue(turn.Value.Content.Contains("https://en.wikipedia.org/wiki/Lima", StringComparison.Ordinal));
+        Assert.IsTrue(turn.Value.Content.Contains("capital of Peru", StringComparison.Ordinal));
+        Assert.IsTrue(turn.Value.Content.Contains("Q2868", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [TestMethod]
     public void TryTurn_ReturnsNullWhenEmpty()
     {
-        Assert.Null(WikiContext.TryTurn([]));
+        Assert.IsNull(WikiContext.TryTurn([]));
     }
 }

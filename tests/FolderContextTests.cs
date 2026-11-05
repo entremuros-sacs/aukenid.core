@@ -4,22 +4,23 @@ using Aukenid.Core.Contracts;
 
 namespace Aukenid.Core.Tests;
 
+[TestClass]
 public sealed class FolderContextTests
 {
-    [Fact]
+    [TestMethod]
     public void TryBuild_ReturnsNullForGeneralAndTemporal()
     {
         var sibling = Thread("s1", ConversationStore.GeneralFolder, "Other chat");
         var messages = Messages(("s1", "u1", "user", "secret from general"));
 
-        Assert.Null(FolderContext.TryBuild(
+        Assert.IsNull(FolderContext.TryBuild(
             ConversationStore.GeneralFolder,
             "General",
             "current",
             [sibling],
             id => messages[id]));
 
-        Assert.Null(FolderContext.TryBuild(
+        Assert.IsNull(FolderContext.TryBuild(
             ConversationStore.TemporalFolder,
             "Temporal",
             "current",
@@ -27,14 +28,14 @@ public sealed class FolderContextTests
             id => messages[id]));
     }
 
-    [Fact]
+    [TestMethod]
     public void TryBuild_ReturnsNullWhenFolderHasNoOtherThreads()
     {
         var current = Thread("c1", "Work", "Only chat");
-        Assert.Null(FolderContext.TryBuild("Work", "Work", "c1", [current], _ => []));
+        Assert.IsNull(FolderContext.TryBuild("Work", "Work", "c1", [current], _ => []));
     }
 
-    [Fact]
+    [TestMethod]
     public void TryBuild_InjectsSiblingTranscriptAndOmitsCurrentThread()
     {
         var current = Thread("c1", "Work", "Current");
@@ -48,17 +49,17 @@ public sealed class FolderContextTests
 
         var text = FolderContext.TryBuild("Work", "Work", "c1", [current, sibling, outsider], id => messages[id]);
 
-        Assert.NotNull(text);
-        Assert.Contains("Work", text);
-        Assert.Contains("Trip to Cusco", text);
-        Assert.Contains("we fly to cusco on friday", text);
-        Assert.Contains("noted, friday flight", text);
-        Assert.DoesNotContain("current-only-secret", text);
-        Assert.DoesNotContain("outsider-secret", text);
-        Assert.DoesNotContain("Current", text);
+        Assert.IsNotNull(text);
+        Assert.IsTrue(text.Contains("Work", StringComparison.Ordinal));
+        Assert.IsTrue(text.Contains("Trip to Cusco", StringComparison.Ordinal));
+        Assert.IsTrue(text.Contains("we fly to cusco on friday", StringComparison.Ordinal));
+        Assert.IsTrue(text.Contains("noted, friday flight", StringComparison.Ordinal));
+        Assert.IsFalse(text.Contains("current-only-secret", StringComparison.Ordinal));
+        Assert.IsFalse(text.Contains("outsider-secret", StringComparison.Ordinal));
+        Assert.IsFalse(text.Contains("Current", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [TestMethod]
     public void TryTurn_IsASystemTurn()
     {
         var sibling = Thread("s1", "Work", "Alpha");
@@ -66,12 +67,12 @@ public sealed class FolderContextTests
 
         var turn = FolderContext.TryTurn("Work", "Work", "c1", [sibling], id => messages[id]);
 
-        Assert.NotNull(turn);
-        Assert.Equal("system", turn.Value.Role);
-        Assert.Contains("hello project", turn.Value.Content);
+        Assert.IsNotNull(turn);
+        Assert.AreEqual("system", turn.Value.Role);
+        Assert.IsTrue(turn.Value.Content.Contains("hello project", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [TestMethod]
     public void TryBuild_SkipsEmptySiblings()
     {
         var empty = Thread("s1", "Work", "Empty");
@@ -85,13 +86,13 @@ public sealed class FolderContextTests
             [empty, filled],
             id => messages.GetValueOrDefault(id) ?? []);
 
-        Assert.NotNull(text);
-        Assert.Contains("Filled", text);
-        Assert.Contains("payload", text);
-        Assert.DoesNotContain("Empty", text);
+        Assert.IsNotNull(text);
+        Assert.IsTrue(text.Contains("Filled", StringComparison.Ordinal));
+        Assert.IsTrue(text.Contains("payload", StringComparison.Ordinal));
+        Assert.IsFalse(text.Contains("Empty", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [TestMethod]
     public void TryBuild_TruncatesToBudget()
     {
         var sibling = Thread("s1", "Work", "Long");
@@ -106,12 +107,12 @@ public sealed class FolderContextTests
             maxTotalChars: 2000,
             maxCharsPerThread: 80);
 
-        Assert.NotNull(text);
-        Assert.Contains('\u2026', text);
-        Assert.DoesNotContain(new string('x', 400), text);
+        Assert.IsNotNull(text);
+        Assert.IsTrue(text.Contains('\u2026'));
+        Assert.IsFalse(text.Contains(new string('x', 400), StringComparison.Ordinal));
     }
 
-    [Fact]
+    [TestMethod]
     public void TryBuild_UsesActivePathNotSiblingBranches()
     {
         var sibling = Thread("s1", "Work", "Branched");
@@ -122,42 +123,42 @@ public sealed class FolderContextTests
 
         var text = FolderContext.TryBuild("Work", "Work", "c1", [sibling], _ => [root, a1, discarded, kept]);
 
-        Assert.NotNull(text);
-        Assert.Contains("kept-branch", text);
-        Assert.DoesNotContain("discarded-branch", text);
+        Assert.IsNotNull(text);
+        Assert.IsTrue(text.Contains("kept-branch", StringComparison.Ordinal));
+        Assert.IsFalse(text.Contains("discarded-branch", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [TestMethod]
     public void IsHeavy_FalseForGeneralAndTemporalRegardlessOfSiblingCount()
     {
         var siblings = Enumerable.Range(0, 10)
             .Select(i => Thread($"s{i}", ConversationStore.GeneralFolder, $"Chat {i}"))
             .ToList();
 
-        Assert.False(FolderContext.IsHeavy(ConversationStore.GeneralFolder, "current", siblings));
+        Assert.IsFalse(FolderContext.IsHeavy(ConversationStore.GeneralFolder, "current", siblings));
     }
 
-    [Fact]
+    [TestMethod]
     public void IsHeavy_FalseAtOrBelowTheCheapThreshold()
     {
         var siblings = Enumerable.Range(0, FolderContext.CheapSiblingThreshold)
             .Select(i => Thread($"s{i}", "Work", $"Chat {i}"))
             .ToList();
 
-        Assert.False(FolderContext.IsHeavy("Work", "current", siblings));
+        Assert.IsFalse(FolderContext.IsHeavy("Work", "current", siblings));
     }
 
-    [Fact]
+    [TestMethod]
     public void IsHeavy_TrueOncePastTheCheapThreshold()
     {
         var siblings = Enumerable.Range(0, FolderContext.CheapSiblingThreshold + 1)
             .Select(i => Thread($"s{i}", "Work", $"Chat {i}"))
             .ToList();
 
-        Assert.True(FolderContext.IsHeavy("Work", "current", siblings));
+        Assert.IsTrue(FolderContext.IsHeavy("Work", "current", siblings));
     }
 
-    [Fact]
+    [TestMethod]
     public void IsHeavy_IgnoresEmptySiblingsAndTheCurrentThread()
     {
         var siblings = Enumerable.Range(0, FolderContext.CheapSiblingThreshold + 5)
@@ -165,7 +166,7 @@ public sealed class FolderContextTests
             .Append(Thread("current", "Work", "Current"))
             .ToList();
 
-        Assert.False(FolderContext.IsHeavy("Work", "current", siblings));
+        Assert.IsFalse(FolderContext.IsHeavy("Work", "current", siblings));
     }
 
     private static ThreadDto Thread(string id, string folder, string title) =>

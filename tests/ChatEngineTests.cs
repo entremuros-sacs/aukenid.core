@@ -3,9 +3,10 @@ using Aukenid.Core.Engine;
 
 namespace Aukenid.Core.Tests;
 
+[TestClass]
 public sealed class ChatEngineTests
 {
-    [Fact]
+    [TestMethod]
     public async Task CompleteAsync_ConcatenatesStreamTokens()
     {
         var engine = new NoChatEngine();
@@ -15,17 +16,17 @@ public sealed class ChatEngineTests
             [new ChatTurn("user", "Hello")],
             CancellationToken.None);
 
-        Assert.Equal("[model] Hello ", reply);
+        Assert.AreEqual("[model] Hello ", reply);
     }
 
-    [Fact]
+    [TestMethod]
     public void NativeRuntime_SearchDirectoriesIncludeAssemblyAndRidNative()
     {
         var directories = NativeRuntime.SearchDirectories();
         var root = Path.GetDirectoryName(typeof(NativeRuntime).Assembly.Location);
-        Assert.Contains(root, directories);
+        Assert.IsTrue(directories.Contains(root));
 
         var ridNative = Path.Combine(root!, "runtimes", RuntimeInformation.RuntimeIdentifier, "native");
-        Assert.Contains(ridNative, directories);
+        Assert.IsTrue(directories.Contains(ridNative));
     }
 }

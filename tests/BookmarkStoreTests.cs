@@ -3,23 +3,24 @@ using Aukenid.Core.Contracts;
 
 namespace Aukenid.Core.Tests;
 
+[TestClass]
 public sealed class BookmarkStoreTests
 {
-    [Fact]
+    [TestMethod]
     public void Toggle_AddsAndRemovesUserPrompt()
     {
         using var workspace = new Workspace();
         var thread = workspace.Store.CreateThread("Chat", ConversationStore.GeneralFolder);
         var prompt = SaveUser(workspace.Store, thread.Id, "Remember this later");
 
-        Assert.True(workspace.Bookmarks.Toggle(thread.Id, prompt.Id));
-        Assert.True(workspace.Bookmarks.IsBookmarked(thread.Id, prompt.Id));
+        Assert.IsTrue(workspace.Bookmarks.Toggle(thread.Id, prompt.Id));
+        Assert.IsTrue(workspace.Bookmarks.IsBookmarked(thread.Id, prompt.Id));
 
-        Assert.False(workspace.Bookmarks.Toggle(thread.Id, prompt.Id));
-        Assert.False(workspace.Bookmarks.IsBookmarked(thread.Id, prompt.Id));
+        Assert.IsFalse(workspace.Bookmarks.Toggle(thread.Id, prompt.Id));
+        Assert.IsFalse(workspace.Bookmarks.IsBookmarked(thread.Id, prompt.Id));
     }
 
-    [Fact]
+    [TestMethod]
     public void Toggle_IgnoresAssistantMessagesAndMissingIds()
     {
         using var workspace = new Workspace();
@@ -29,13 +30,13 @@ public sealed class BookmarkStoreTests
             Guid.CreateVersion7().ToString(), thread.Id, prompt.Id, "Aukenid", "Hi", DateTimeOffset.UtcNow);
         workspace.Store.SaveMessage(reply);
 
-        Assert.False(workspace.Bookmarks.Toggle(thread.Id, reply.Id));
-        Assert.False(workspace.Bookmarks.Toggle(thread.Id, Guid.CreateVersion7().ToString()));
-        Assert.False(workspace.Bookmarks.Toggle("", prompt.Id));
-        Assert.Empty(workspace.Bookmarks.List().Threads);
+        Assert.IsFalse(workspace.Bookmarks.Toggle(thread.Id, reply.Id));
+        Assert.IsFalse(workspace.Bookmarks.Toggle(thread.Id, Guid.CreateVersion7().ToString()));
+        Assert.IsFalse(workspace.Bookmarks.Toggle("", prompt.Id));
+        Assert.AreEqual(0, workspace.Bookmarks.List().Threads.Count);
     }
 
-    [Fact]
+    [TestMethod]
     public void List_GroupsByFolderAndThread_TruncatesSnippetTo50()
     {
         using var workspace = new Workspace();
@@ -60,37 +61,39 @@ public sealed class BookmarkStoreTests
         workspace.Bookmarks.Toggle(temporal.Id, temporalPrompt.Id);
 
         var result = workspace.Bookmarks.List();
-        Assert.Equal(3, result.Folders.Count);
-        Assert.Equal(ConversationStore.TemporalFolder, result.Folders[0].Path);
-        Assert.Equal(ConversationStore.GeneralFolder, result.Folders[1].Path);
-        Assert.Equal("Work", result.Folders[2].Path);
+        Assert.AreEqual(3, result.Folders.Count);
+        Assert.AreEqual(ConversationStore.TemporalFolder, result.Folders[0].Path);
+        Assert.AreEqual(ConversationStore.GeneralFolder, result.Folders[1].Path);
+        Assert.AreEqual("Work", result.Folders[2].Path);
 
         var generalThread = result.Threads.Single(item => item.Id == general.Id);
-        Assert.Equal(["First prompt in general", "Second prompt in general"], generalThread.Bookmarks.Select(item => item.Text));
+        CollectionAssert.AreEqual(
+            new[] { "First prompt in general", "Second prompt in general" },
+            generalThread.Bookmarks.Select(item => item.Text).ToArray());
 
         var workThread = result.Threads.Single(item => item.Id == work.Id);
         var truncated = workThread.Bookmarks.Single(item => item.MessageId == longPrompt.Id).Text;
-        Assert.Equal(50, truncated.Length);
-        Assert.StartsWith("This prompt is deliberately longer", truncated, StringComparison.Ordinal);
+        Assert.AreEqual(50, truncated.Length);
+        Assert.IsTrue(truncated.StartsWith("This prompt is deliberately longer", StringComparison.Ordinal));
 
-        Assert.Contains(result.Threads, item => item.Id == temporal.Id);
+        Assert.IsTrue(result.Threads.Any(item => item.Id == temporal.Id));
     }
 
-    [Fact]
+    [TestMethod]
     public void List_CollapsesWhitespaceAndPersistsAcrossReload()
     {
         using var workspace = new Workspace();
         var thread = workspace.Store.CreateThread("Chat", ConversationStore.GeneralFolder);
         var prompt = SaveUser(workspace.Store, thread.Id, "Hello\n\n  world");
-        Assert.True(workspace.Bookmarks.Toggle(thread.Id, prompt.Id));
+        Assert.IsTrue(workspace.Bookmarks.Toggle(thread.Id, prompt.Id));
 
         var reloaded = new BookmarkStore(workspace.BookmarkPath, workspace.Store);
-        var listed = Assert.Single(Assert.Single(reloaded.List().Threads).Bookmarks);
-        Assert.Equal("Hello world", listed.Text);
-        Assert.Equal(prompt.Id, listed.MessageId);
+        var listed = reloaded.List().Threads.Single().Bookmarks.Single();
+        Assert.AreEqual("Hello world", listed.Text);
+        Assert.AreEqual(prompt.Id, listed.MessageId);
     }
 
-    [Fact]
+    [TestMethod]
     public void List_PrunesDeletedThreadsAndMessages()
     {
         using var workspace = new Workspace();
@@ -104,19 +107,19 @@ public sealed class BookmarkStoreTests
         workspace.Store.DeleteThread(goneThread.Id);
 
         var result = workspace.Bookmarks.List();
-        var remaining = Assert.Single(result.Threads);
-        Assert.Equal(keptThread.Id, remaining.Id);
-        Assert.Equal(kept.Id, Assert.Single(remaining.Bookmarks).MessageId);
+        var remaining = result.Threads.Single();
+        Assert.AreEqual(keptThread.Id, remaining.Id);
+        Assert.AreEqual(kept.Id, remaining.Bookmarks.Single().MessageId);
 
         var reloaded = new BookmarkStore(workspace.BookmarkPath, workspace.Store);
-        Assert.Single(reloaded.List().Threads);
+        Assert.AreEqual(1, reloaded.List().Threads.Count);
     }
 
-    [Fact]
+    [TestMethod]
     public void Snippet_UsesEllipsisWhenPromptIsEmpty()
     {
-        Assert.Equal("\u2026", BookmarkStore.Snippet("   \n"));
-        Assert.Equal("short", BookmarkStore.Snippet("short"));
+        Assert.AreEqual("\u2026", BookmarkStore.Snippet("   \n"));
+        Assert.AreEqual("short", BookmarkStore.Snippet("short"));
     }
 
     private static MessageDto SaveUser(

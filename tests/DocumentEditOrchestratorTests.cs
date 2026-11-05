@@ -4,31 +4,32 @@ using Aukenid.Core.Services;
 
 namespace Aukenid.Core.Tests;
 
+[TestClass]
 public sealed class DocumentEditOrchestratorTests
 {
     private const string Doc = "# Title\n\nIntro.\n\n## Ingredients\n\n- flour\n- sugar\n\n## Steps\n\nMix it.\n";
 
-    [Fact]
+    [TestMethod]
     public void BuildEditTurns_IncludesSystemPromptAndChunkOutline()
     {
         var result = DocumentEditOrchestrator.BuildEditTurns([new ChatTurn("user", "add a step")], Doc, []);
 
-        Assert.Equal("system", result.Turns[0].Role);
-        Assert.Contains(">>> CHUNK", result.Turns[^2].Content);
-        Assert.Equal(3, result.Chunks.Count);
-        Assert.Equal(3, result.EditableIds.Count);
+        Assert.AreEqual("system", result.Turns[0].Role);
+        Assert.IsTrue(result.Turns[^2].Content.Contains(">>> CHUNK", StringComparison.Ordinal));
+        Assert.AreEqual(3, result.Chunks.Count);
+        Assert.AreEqual(3, result.EditableIds.Count);
     }
 
-    [Fact]
+    [TestMethod]
     public void BuildEditTurns_EmptyDocument_StillProducesAnInsertableContext()
     {
         var result = DocumentEditOrchestrator.BuildEditTurns([new ChatTurn("user", "write something")], null, []);
 
-        Assert.Empty(result.Chunks);
-        Assert.Contains("target=START", result.Turns[^2].Content);
+        Assert.AreEqual(0, result.Chunks.Count);
+        Assert.IsTrue(result.Turns[^2].Content.Contains("target=START", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [TestMethod]
     public void TryApplyPatch_ReplaceKnownEditableChunk_Applies()
     {
         var prompt = DocumentEditOrchestrator.BuildEditTurns([new ChatTurn("user", "x")], Doc, []);
@@ -37,13 +38,13 @@ public sealed class DocumentEditOrchestratorTests
 
         var result = DocumentEditOrchestrator.TryApplyPatch(response, prompt.Chunks, prompt.EditableIds);
 
-        Assert.NotNull(result);
-        Assert.Contains("- salt", result);
-        Assert.Contains("Mix it.", result); // untouched chunk survives
-        Assert.Contains("Intro.", result); // untouched chunk survives
+        Assert.IsNotNull(result);
+        Assert.IsTrue(result.Contains("- salt", StringComparison.Ordinal));
+        Assert.IsTrue(result.Contains("Mix it.", StringComparison.Ordinal)); // untouched chunk survives
+        Assert.IsTrue(result.Contains("Intro.", StringComparison.Ordinal)); // untouched chunk survives
     }
 
-    [Fact]
+    [TestMethod]
     public void TryApplyPatch_UnknownTarget_ReturnsNullForFallback()
     {
         var prompt = DocumentEditOrchestrator.BuildEditTurns([new ChatTurn("user", "x")], Doc, []);
@@ -51,20 +52,20 @@ public sealed class DocumentEditOrchestratorTests
 
         var result = DocumentEditOrchestrator.TryApplyPatch(response, prompt.Chunks, prompt.EditableIds);
 
-        Assert.Null(result);
+        Assert.IsNull(result);
     }
 
-    [Fact]
+    [TestMethod]
     public void TryApplyPatch_NoEditBlocks_ReturnsNull()
     {
         var prompt = DocumentEditOrchestrator.BuildEditTurns([new ChatTurn("user", "x")], Doc, []);
 
         var result = DocumentEditOrchestrator.TryApplyPatch("Sure, I can help with that!", prompt.Chunks, prompt.EditableIds);
 
-        Assert.Null(result);
+        Assert.IsNull(result);
     }
 
-    [Fact]
+    [TestMethod]
     public void TryApplyPatch_Delete_RemovesChunkEvenIfNotShownInFull()
     {
         var prompt = DocumentEditOrchestrator.BuildEditTurns([new ChatTurn("user", "x")], Doc, []);
@@ -77,12 +78,12 @@ public sealed class DocumentEditOrchestratorTests
 
         var result = DocumentEditOrchestrator.TryApplyPatch(response, prompt.Chunks, notEditable);
 
-        Assert.NotNull(result);
-        Assert.DoesNotContain("Mix it.", result);
-        Assert.Contains("Intro.", result);
+        Assert.IsNotNull(result);
+        Assert.IsFalse(result.Contains("Mix it.", StringComparison.Ordinal));
+        Assert.IsTrue(result.Contains("Intro.", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [TestMethod]
     public void TryApplyPatch_InsertAfterEnd_AppendsNewSection()
     {
         var prompt = DocumentEditOrchestrator.BuildEditTurns([new ChatTurn("user", "x")], Doc, []);
@@ -90,11 +91,11 @@ public sealed class DocumentEditOrchestratorTests
 
         var result = DocumentEditOrchestrator.TryApplyPatch(response, prompt.Chunks, prompt.EditableIds);
 
-        Assert.NotNull(result);
-        Assert.EndsWith("Some new note.\n", result);
+        Assert.IsNotNull(result);
+        Assert.IsTrue(result.EndsWith("Some new note.\n", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [TestMethod]
     public void TryApplyPatch_ReplaceWithEmptyContent_ActsAsDelete()
     {
         var prompt = DocumentEditOrchestrator.BuildEditTurns([new ChatTurn("user", "x")], Doc, []);
@@ -103,11 +104,11 @@ public sealed class DocumentEditOrchestratorTests
 
         var result = DocumentEditOrchestrator.TryApplyPatch(response, prompt.Chunks, prompt.EditableIds);
 
-        Assert.NotNull(result);
-        Assert.DoesNotContain("Mix it.", result);
+        Assert.IsNotNull(result);
+        Assert.IsFalse(result.Contains("Mix it.", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [TestMethod]
     public void TryApplyPatch_ReplacingOmittedChunk_ReturnsNull()
     {
         var prompt = DocumentEditOrchestrator.BuildEditTurns([new ChatTurn("user", "x")], Doc, []);
@@ -117,6 +118,6 @@ public sealed class DocumentEditOrchestratorTests
 
         var result = DocumentEditOrchestrator.TryApplyPatch(response, prompt.Chunks, editableWithoutSteps);
 
-        Assert.Null(result);
+        Assert.IsNull(result);
     }
 }

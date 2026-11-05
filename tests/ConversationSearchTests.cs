@@ -3,9 +3,10 @@ using Aukenid.Core.Contracts;
 
 namespace Aukenid.Core.Tests;
 
+[TestClass]
 public sealed class ConversationSearchTests
 {
-    [Fact]
+    [TestMethod]
     public void Search_FindsPersistedAndTemporalThreadsWithOffsets()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-search-{Guid.NewGuid():N}");
@@ -22,20 +23,20 @@ public sealed class ConversationSearchTests
 
             var result = new ConversationSearch(store).Search("hello");
 
-            Assert.Equal("hello", result.Query);
-            Assert.Equal(2, result.Threads.Count);
-            Assert.Contains(result.Folders, folder => folder.Path == ConversationStore.GeneralFolder);
-            Assert.Contains(result.Folders, folder => folder.Path == ConversationStore.TemporalFolder);
+            Assert.AreEqual("hello", result.Query);
+            Assert.AreEqual(2, result.Threads.Count);
+            Assert.IsTrue(result.Folders.Any(folder => folder.Path == ConversationStore.GeneralFolder));
+            Assert.IsTrue(result.Folders.Any(folder => folder.Path == ConversationStore.TemporalFolder));
 
             var persistedHit = result.Threads.Single(thread => thread.Id == persisted.Id);
-            Assert.Equal(1, persistedHit.Count);
-            Assert.Equal(0, persistedHit.Occurrences[0].Offset);
-            Assert.Equal(5, persistedHit.Occurrences[0].Length);
-            Assert.Equal(persisted.Id, persistedHit.Occurrences[0].ThreadId);
+            Assert.AreEqual(1, persistedHit.Count);
+            Assert.AreEqual(0, persistedHit.Occurrences[0].Offset);
+            Assert.AreEqual(5, persistedHit.Occurrences[0].Length);
+            Assert.AreEqual(persisted.Id, persistedHit.Occurrences[0].ThreadId);
 
             var temporalHit = result.Threads.Single(thread => thread.Id == temporal.Id);
-            Assert.Equal(1, temporalHit.Count);
-            Assert.Equal(4, temporalHit.Occurrences[0].Offset);
+            Assert.AreEqual(1, temporalHit.Count);
+            Assert.AreEqual(4, temporalHit.Occurrences[0].Offset);
         }
         finally
         {
@@ -43,7 +44,7 @@ public sealed class ConversationSearchTests
         }
     }
 
-    [Fact]
+    [TestMethod]
     public void Search_IsCaseInsensitiveAndCollectsMultipleHitsInOneMessage()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-search-{Guid.NewGuid():N}");
@@ -55,12 +56,15 @@ public sealed class ConversationSearchTests
                 Guid.CreateVersion7().ToString(), thread.Id, null, "user", "Hello world, hello", DateTimeOffset.UtcNow));
 
             var result = new ConversationSearch(store).Search("HELLO");
-            var hit = Assert.Single(result.Threads);
+            var hit = result.Threads.Single();
 
-            Assert.Equal(2, hit.Count);
-            Assert.Equal(0, hit.Occurrences[0].Offset);
-            Assert.Equal(13, hit.Occurrences[1].Offset);
-            Assert.All(hit.Occurrences, occurrence => Assert.Equal(5, occurrence.Length));
+            Assert.AreEqual(2, hit.Count);
+            Assert.AreEqual(0, hit.Occurrences[0].Offset);
+            Assert.AreEqual(13, hit.Occurrences[1].Offset);
+            foreach (var occurrence in hit.Occurrences)
+            {
+                Assert.AreEqual(5, occurrence.Length);
+            }
         }
         finally
         {
@@ -68,7 +72,7 @@ public sealed class ConversationSearchTests
         }
     }
 
-    [Fact]
+    [TestMethod]
     public void Search_OmitsFoldersWithoutMatchesAndIgnoresEmptyQuery()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-search-{Guid.NewGuid():N}");
@@ -82,13 +86,13 @@ public sealed class ConversationSearchTests
 
             var search = new ConversationSearch(store);
             var empty = search.Search("   ");
-            Assert.Empty(empty.Threads);
-            Assert.Empty(empty.Folders);
+            Assert.AreEqual(0, empty.Threads.Count);
+            Assert.AreEqual(0, empty.Folders.Count);
 
             var result = search.Search("folder");
-            Assert.Single(result.Threads);
-            Assert.Single(result.Folders);
-            Assert.Equal(ConversationStore.GeneralFolder, result.Folders[0].Path);
+            Assert.AreEqual(1, result.Threads.Count);
+            Assert.AreEqual(1, result.Folders.Count);
+            Assert.AreEqual(ConversationStore.GeneralFolder, result.Folders[0].Path);
         }
         finally
         {
@@ -96,7 +100,7 @@ public sealed class ConversationSearchTests
         }
     }
 
-    [Fact]
+    [TestMethod]
     public void Search_WholeWordSkipsEmbeddedMatches()
     {
         var root = Path.Combine(Path.GetTempPath(), $"aukenid-search-{Guid.NewGuid():N}");
@@ -116,10 +120,10 @@ public sealed class ConversationSearchTests
             var all = search.Search("cat");
             var whole = search.Search("cat", wholeWord: true);
 
-            Assert.Equal(3, Assert.Single(all.Threads).Count);
-            var hit = Assert.Single(whole.Threads);
-            Assert.Equal(1, hit.Count);
-            Assert.Equal(2, hit.Occurrences[0].Offset);
+            Assert.AreEqual(3, all.Threads.Single().Count);
+            var hit = whole.Threads.Single();
+            Assert.AreEqual(1, hit.Count);
+            Assert.AreEqual(2, hit.Occurrences[0].Offset);
         }
         finally
         {

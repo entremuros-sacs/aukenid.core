@@ -3,9 +3,10 @@ using Aukenid.Core.Contracts;
 
 namespace Aukenid.Core.Tests;
 
+[TestClass]
 public sealed class MarkdownPdfBlocksTests
 {
-    [Fact]
+    [TestMethod]
     public void Parse_ReadsGfmTableHeadersAndRows()
     {
         const string markdown = """
@@ -21,17 +22,20 @@ public sealed class MarkdownPdfBlocksTests
 
         var blocks = MarkdownPdfBlocks.Parse(markdown);
 
-        Assert.Equal(3, blocks.Count);
-        Assert.Equal("Before the table.", Assert.IsType<MarkdownPdfParagraph>(blocks[0]).Text);
-        var table = Assert.IsType<MarkdownPdfTable>(blocks[1]);
-        Assert.Equal(["Metric", "Value", "Notes"], table.Headers);
-        Assert.Equal(2, table.Rows.Count);
-        Assert.Equal(["Accuracy", "92.4%", "held-out"], table.Rows[0]);
-        Assert.Equal(["Latency", "38 ms", "p95"], table.Rows[1]);
-        Assert.Equal("After the table.", Assert.IsType<MarkdownPdfParagraph>(blocks[2]).Text);
+        Assert.AreEqual(3, blocks.Count);
+        Assert.IsInstanceOfType(blocks[0], typeof(MarkdownPdfParagraph));
+        Assert.AreEqual("Before the table.", ((MarkdownPdfParagraph)blocks[0]).Text);
+        Assert.IsInstanceOfType(blocks[1], typeof(MarkdownPdfTable));
+        var table = (MarkdownPdfTable)blocks[1];
+        CollectionAssert.AreEqual(new[] { "Metric", "Value", "Notes" }, table.Headers.ToArray());
+        Assert.AreEqual(2, table.Rows.Count);
+        CollectionAssert.AreEqual(new[] { "Accuracy", "92.4%", "held-out" }, table.Rows[0].ToArray());
+        CollectionAssert.AreEqual(new[] { "Latency", "38 ms", "p95" }, table.Rows[1].ToArray());
+        Assert.IsInstanceOfType(blocks[2], typeof(MarkdownPdfParagraph));
+        Assert.AreEqual("After the table.", ((MarkdownPdfParagraph)blocks[2]).Text);
     }
 
-    [Fact]
+    [TestMethod]
     public void Parse_ReadsHeadingsListsAndCode()
     {
         const string markdown = """
@@ -46,14 +50,17 @@ public sealed class MarkdownPdfBlocksTests
             """;
 
         var blocks = MarkdownPdfBlocks.Parse(markdown);
-        Assert.Equal("Title", Assert.IsType<MarkdownPdfHeading>(blocks[0]).Text);
-        var list = Assert.IsType<MarkdownPdfList>(blocks[1]);
-        Assert.False(list.Ordered);
-        Assert.Equal(["alpha", "beta"], list.Items);
-        Assert.Equal("code", Assert.IsType<MarkdownPdfCode>(blocks[2]).Text);
+        Assert.IsInstanceOfType(blocks[0], typeof(MarkdownPdfHeading));
+        Assert.AreEqual("Title", ((MarkdownPdfHeading)blocks[0]).Text);
+        Assert.IsInstanceOfType(blocks[1], typeof(MarkdownPdfList));
+        var list = (MarkdownPdfList)blocks[1];
+        Assert.IsFalse(list.Ordered);
+        CollectionAssert.AreEqual(new[] { "alpha", "beta" }, list.Items.ToArray());
+        Assert.IsInstanceOfType(blocks[2], typeof(MarkdownPdfCode));
+        Assert.AreEqual("code", ((MarkdownPdfCode)blocks[2]).Text);
     }
 
-    [Fact]
+    [TestMethod]
     public void BuildPdf_ContainsTableContentWithoutPipeRow()
     {
         var thread = new ThreadDto("t1", "Export", "General", DateTimeOffset.UnixEpoch, true);
@@ -68,11 +75,11 @@ public sealed class MarkdownPdfBlocksTests
         };
 
         var pdf = ThreadExportService.BuildPdf(thread, messages);
-        Assert.True(pdf.Length > 500);
-        Assert.StartsWith("%PDF", System.Text.Encoding.ASCII.GetString(pdf[..4]));
+        Assert.IsTrue(pdf.Length > 500);
+        Assert.IsTrue(System.Text.Encoding.ASCII.GetString(pdf[..4]).StartsWith("%PDF", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [TestMethod]
     public void BuildPdf_DoesNotThrowOnMissingGlyphs()
     {
         var thread = new ThreadDto("t1", "Export", "General", DateTimeOffset.UnixEpoch, true);
@@ -82,6 +89,6 @@ public sealed class MarkdownPdfBlocksTests
         };
 
         var pdf = ThreadExportService.BuildPdf(thread, messages);
-        Assert.StartsWith("%PDF", System.Text.Encoding.ASCII.GetString(pdf[..4]));
+        Assert.IsTrue(System.Text.Encoding.ASCII.GetString(pdf[..4]).StartsWith("%PDF", StringComparison.Ordinal));
     }
 }
