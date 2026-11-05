@@ -15,6 +15,8 @@ using System.Text;
 internal enum PromptKey
 {
     ToolRouterSystem,
+    ThreadSummaryNote,
+    ThreadSummarySystem,
     DocumentGuidance,
     DocumentGenerationSystem,
     AttachmentContextNote,
@@ -48,6 +50,12 @@ public static class PromptLibrary
     /// which <see cref="PromptKey"/> backs it.
     /// </summary>
     public static ChatTurn CodeExplanationTurn() => new("system", Get(PromptKey.CodeExplanation));
+
+    public static ChatTurn ThreadSummaryNoteTurn(string summary) => new(
+        "system",
+        Get(PromptKey.ThreadSummaryNote) + "\n\n" + (summary ?? string.Empty).Trim());
+
+    public static ChatTurn ThreadSummarySystemTurn() => new("system", Get(PromptKey.ThreadSummarySystem));
 
     private static IReadOnlyDictionary<PromptKey, string> Load()
     {

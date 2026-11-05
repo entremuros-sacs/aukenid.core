@@ -22,6 +22,7 @@ public sealed class ConversationStore
     private const string ThreadFileName = "conversation.md";
     private const string AttachmentsDirectoryName = "attachments";
     private const string DocumentFileName = "document.md";
+    private const string SummaryFileName = "summary.md";
     private const string DocumentVersionsDirectoryName = "document-versions";
 
     private readonly string _root;
@@ -941,6 +942,39 @@ public sealed class ConversationStore
 
             Directory.CreateDirectory(dir);
             File.WriteAllText(Path.Combine(dir, DocumentFileName), content);
+            return true;
+        }
+    }
+
+    /// <summary>Markdown content of this thread's compressed summary, or null if none exists yet or the thread is unknown.</summary>
+    public string? ReadSummary(string threadId)
+    {
+        lock (_sync)
+        {
+            var dir = GetThreadDirectory(threadId);
+            if (dir is null)
+            {
+                return null;
+            }
+
+            var path = Path.Combine(dir, SummaryFileName);
+            return File.Exists(path) ? File.ReadAllText(path) : null;
+        }
+    }
+
+    /// <summary>Writes the compressed summary's markdown content next to the thread's conversation file. Returns false if the thread is unknown.</summary>
+    public bool SaveSummary(string threadId, string content)
+    {
+        lock (_sync)
+        {
+            var dir = GetThreadDirectory(threadId);
+            if (dir is null)
+            {
+                return false;
+            }
+
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, SummaryFileName), content);
             return true;
         }
     }

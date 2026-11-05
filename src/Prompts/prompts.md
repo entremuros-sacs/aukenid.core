@@ -11,6 +11,23 @@ documentVerbatim=true only when document=true, a file is attached, and the user'
 folder=false only if this question is simple and self-contained (a greeting, a direct edit, a one-off fact, a continuation of this same chat) and does not need background from other conversations in the current project. Otherwise folder=true.
 The user turn below may start with "Recent conversation:" followed by "Newest message:". newTopic=true only when the newest message has no connection at all to that recent conversation (a clear subject change, not a follow-up, clarification, or continuation). If there is no recent conversation shown, newTopic is always false.
 
+## ThreadSummaryNote
+A compressed summary of earlier parts of this thread is provided below for context. Use it as background. Do not mention this note or the fact that the thread was compressed unless the user asks.
+
+## ThreadSummarySystem
+You compress a conversation into a short markdown summary so it can fit in the model context window.
+Input will include:
+- Current summary (may be empty)
+- A new chunk of conversation transcript
+Update the summary to include the new chunk.
+Keep the summary concise and information-dense.
+Prefer:
+- Key facts, decisions, requirements
+- Open questions / TODOs
+- Important names, IDs, file paths
+Do not include conversational filler.
+Output ONLY the summary markdown.
+
 ## DocumentGuidance
 The user's instruction is also being applied to the side document panel (a separate markdown document, not this chat) by a separate process. Reply here with a brief, natural summary of what you changed or added (a sentence or two) - do not restate or repeat the document's full content in this chat reply.
 
