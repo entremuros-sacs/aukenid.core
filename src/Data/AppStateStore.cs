@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 using System.Threading;
 
 /// <summary>Remembers which sidebar folder was last expanded, and which model was last active, across app launches.</summary>
-public sealed partial class UiStateStore
+public sealed partial class AppStateStore
 {
     private readonly string _path;
     private readonly Lock _sync = new();
@@ -15,7 +15,9 @@ public sealed partial class UiStateStore
 
     public string? SelectedModelId { get; private set; }
 
-    public UiStateStore(string path)
+    public string? SelectedKnowledgeId { get; private set; }
+
+    public AppStateStore(string path)
     {
         _path = path;
         Load();
@@ -42,6 +44,15 @@ public sealed partial class UiStateStore
         }
     }
 
+    public void SetSelectedKnowledge(string? knowledgeId)
+    {
+        lock (_sync)
+        {
+            SelectedKnowledgeId = string.IsNullOrWhiteSpace(knowledgeId) ? null : knowledgeId;
+            Persist();
+        }
+    }
+
     private void Persist()
     {
         var dir = Path.GetDirectoryName(_path);
@@ -50,7 +61,7 @@ public sealed partial class UiStateStore
             Directory.CreateDirectory(dir);
         }
 
-        File.WriteAllText(_path, JsonSerializer.Serialize(new FileModel(SelectedFolder, SelectedModelId), UiStateJsonContext.Default.FileModel));
+        File.WriteAllText(_path, JsonSerializer.Serialize(new FileModel(SelectedFolder, SelectedModelId, SelectedKnowledgeId), AppStateJsonContext.Default.FileModel));
     }
 
     private void Load()
@@ -64,13 +75,14 @@ public sealed partial class UiStateStore
 
             try
             {
-                var parsed = JsonSerializer.Deserialize(File.ReadAllText(_path), UiStateJsonContext.Default.FileModel);
+                var parsed = JsonSerializer.Deserialize(File.ReadAllText(_path), AppStateJsonContext.Default.FileModel);
                 if (!string.IsNullOrWhiteSpace(parsed?.SelectedFolder))
                 {
                     SelectedFolder = parsed.SelectedFolder;
                 }
 
                 SelectedModelId = parsed?.SelectedModelId;
+                SelectedKnowledgeId = parsed?.SelectedKnowledgeId;
             }
             catch (JsonException)
             {
@@ -79,9 +91,9 @@ public sealed partial class UiStateStore
         }
     }
 
-    private sealed record FileModel(string SelectedFolder, string? SelectedModelId = null);
+    private sealed record FileModel(string SelectedFolder, string? SelectedModelId = null, string? SelectedKnowledgeId = null);
 
     [JsonSerializable(typeof(FileModel))]
     [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
-    private sealed partial class UiStateJsonContext : JsonSerializerContext;
+    private sealed partial class AppStateJsonContext : JsonSerializerContext;
 }

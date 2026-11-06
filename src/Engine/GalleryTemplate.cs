@@ -38,6 +38,25 @@ public static partial class GalleryTemplate
     public static string? GalleryHash(string dataDirectory, string? modelId, string? weightsPath) =>
         FindModel(dataDirectory, modelId, weightsPath)?.Hash;
 
+    public static (string Id, string Url, string? Hash)? FindFirstByType(string dataDirectory, string type)
+    {
+        var models = LoadModels(dataDirectory);
+        if (models is null)
+        {
+            return null;
+        }
+
+        foreach (var model in models)
+        {
+            if (model.Type is not null && model.Type.Equals(type, StringComparison.OrdinalIgnoreCase))
+            {
+                return (model.Id, model.Url, model.Hash);
+            }
+        }
+
+        return null;
+    }
+
     private static ChatTemplate? MatchExact(string? key)
     {
         if (string.IsNullOrWhiteSpace(key))
@@ -109,7 +128,7 @@ public static partial class GalleryTemplate
         return end > 0 && end < value.Length ? value[..end] : value;
     }
 
-    private static ModelRow? FindModel(string dataDirectory, string? modelId, string? weightsPath)
+    private static List<ModelRow>? LoadModels(string dataDirectory)
     {
         var path = Path.Combine(dataDirectory, "models.json");
         if (!File.Exists(path))
@@ -117,7 +136,12 @@ public static partial class GalleryTemplate
             return null;
         }
 
-        var models = JsonSerializer.Deserialize(File.ReadAllText(path), GalleryJsonContext.Default.ListModelRow);
+        return JsonSerializer.Deserialize(File.ReadAllText(path), GalleryJsonContext.Default.ListModelRow);
+    }
+
+    private static ModelRow? FindModel(string dataDirectory, string? modelId, string? weightsPath)
+    {
+        var models = LoadModels(dataDirectory);
         if (models is null)
         {
             return null;
@@ -165,6 +189,8 @@ public static partial class GalleryTemplate
     private sealed class ModelRow
     {
         public string Id { get; set; } = string.Empty;
+
+        public string? Type { get; set; }
 
         public string Template { get; set; } = string.Empty;
 

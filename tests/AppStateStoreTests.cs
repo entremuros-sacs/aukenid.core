@@ -3,7 +3,7 @@ using Aukenid.Core.Data;
 namespace Aukenid.Core.Tests;
 
 [TestClass]
-public sealed class UiStateStoreTests
+public sealed class AppStateStoreTests
 {
     [TestMethod]
     public void SetSelectedFolder_SurvivesReload()
@@ -11,11 +11,11 @@ public sealed class UiStateStoreTests
         var path = Path.Combine(Path.GetTempPath(), "aukenid-ui-state-tests", Guid.NewGuid().ToString("N"), "ui-state.json");
         try
         {
-            var store = new UiStateStore(path);
+            var store = new AppStateStore(path);
             Assert.AreEqual(ConversationStore.GeneralFolder, store.SelectedFolder);
 
             store.SetSelectedFolder("Work");
-            var reloaded = new UiStateStore(path);
+            var reloaded = new AppStateStore(path);
 
             Assert.AreEqual("Work", reloaded.SelectedFolder);
         }
@@ -38,7 +38,7 @@ public sealed class UiStateStoreTests
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, "{not json");
 
-            var store = new UiStateStore(path);
+            var store = new AppStateStore(path);
 
             Assert.AreEqual(ConversationStore.GeneralFolder, store.SelectedFolder);
         }

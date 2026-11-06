@@ -10,6 +10,8 @@
     <RootNamespace>Aukenid.Core</RootNamespace>
     <IsPackable>true</IsPackable>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     
     <PublishTrimmed>true</PublishTrimmed>
     <TrimMode>partial</TrimMode>
