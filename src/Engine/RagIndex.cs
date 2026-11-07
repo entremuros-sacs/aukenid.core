@@ -9,23 +9,27 @@ using Microsoft.Win32.SafeHandles;
 
 public unsafe sealed class RagIndex : IDisposable
 {
-    private const int HeaderSize = 14;
+    private const int FixedHeaderSize = 18;
     private readonly MemoryMappedFile _mmf;
     private readonly MemoryMappedViewAccessor _accessor;
     private readonly SafeMemoryMappedViewHandle _handle;
     private byte* _basePtr;
     private readonly ulong[] _textOffsets;
     private readonly uint[] _textLengths;
+    private readonly long[] _sourceUrlOffsets;
+    private readonly ushort[] _sourceUrlLengths;
     private readonly long[] _titleOffsets;
     private readonly ushort[] _titleLengths;
     private readonly long _textPayloadBase;
+    private readonly long _vectorBase;
 
     public string Path { get; }
     public uint ChunkCount { get; }
     public ushort Dim { get; }
     public uint Version { get; }
+    public string Instructions { get; }
 
-    private float* VectorBasePtr => (float*)(_basePtr + HeaderSize);
+    private float* VectorBasePtr => (float*)(_basePtr + _vectorBase);
 
     private RagIndex(
         string path,
@@ -36,11 +40,15 @@ public unsafe sealed class RagIndex : IDisposable
         uint chunkCount,
         ushort dim,
         uint version,
+        string instructions,
         ulong[] textOffsets,
         uint[] textLengths,
+        long[] sourceUrlOffsets,
+        ushort[] sourceUrlLengths,
         long[] titleOffsets,
         ushort[] titleLengths,
-        long textPayloadBase)
+        long textPayloadBase,
+        long vectorBase)
     {
         Path = path;
         _mmf = mmf;
@@ -50,11 +58,15 @@ public unsafe sealed class RagIndex : IDisposable
         ChunkCount = chunkCount;
         Dim = dim;
         Version = version;
+        Instructions = instructions;
         _textOffsets = textOffsets;
         _textLengths = textLengths;
+        _sourceUrlOffsets = sourceUrlOffsets;
+        _sourceUrlLengths = sourceUrlLengths;
         _titleOffsets = titleOffsets;
         _titleLengths = titleLengths;
         _textPayloadBase = textPayloadBase;
+        _vectorBase = vectorBase;
     }
 
     public static RagIndex Open(string path)
@@ -74,23 +86,38 @@ public unsafe sealed class RagIndex : IDisposable
 
             try
             {
-                if (fileLength < HeaderSize)
+                if (fileLength < FixedHeaderSize)
                     throw new InvalidDataException("RAG file is too small.");
 
-                if (ptr[0] != (byte)'W' || ptr[1] != (byte)'K' || ptr[2] != (byte)'V' || ptr[3] != (byte)'R')
+                if (ptr[0] != (byte)'A' || ptr[1] != (byte)'U' || ptr[2] != (byte)'K' || ptr[3] != (byte)'N')
                     throw new InvalidDataException("RAG file magic bytes do not match.");
 
                 var version = ReadUInt32(ptr + 4);
                 var chunkCount = ReadUInt32(ptr + 8);
                 var dim = ReadUInt16(ptr + 12);
+                var instructionsLen = ReadUInt32(ptr + 14);
+
+                if (instructionsLen > int.MaxValue)
+                    throw new InvalidDataException("RAG file instructions section is too large.");
+
+                var instructionsOffset = FixedHeaderSize;
+                var vectorBase = checked((long)FixedHeaderSize + instructionsLen);
+                if (vectorBase > fileLength)
+                    throw new InvalidDataException("RAG file is truncated (instructions section).");
+
+                var instructions = instructionsLen == 0
+                    ? string.Empty
+                    : Encoding.UTF8.GetString(new ReadOnlySpan<byte>(ptr + instructionsOffset, checked((int)instructionsLen)));
 
                 var vectorsBytes = (long)chunkCount * dim * sizeof(float);
-                var metaStart = HeaderSize + vectorsBytes;
+                var metaStart = vectorBase + vectorsBytes;
                 if (metaStart > fileLength)
                     throw new InvalidDataException("RAG file is truncated (vectors section).");
 
                 var textOffsets = new ulong[chunkCount];
                 var textLengths = new uint[chunkCount];
+                var sourceUrlOffsets = new long[chunkCount];
+                var sourceUrlLengths = new ushort[chunkCount];
                 var titleOffsets = new long[chunkCount];
                 var titleLengths = new ushort[chunkCount];
 
@@ -102,9 +129,22 @@ public unsafe sealed class RagIndex : IDisposable
 
                     var titleLen = ReadUInt16(ptr + cursor);
                     cursor += 2;
+                    if (cursor + titleLen > fileLength)
+                        throw new InvalidDataException("RAG file is truncated (title).");
                     titleOffsets[i] = cursor;
                     titleLengths[i] = titleLen;
                     cursor += titleLen;
+
+                    if (cursor + 2 > fileLength)
+                        throw new InvalidDataException("RAG file is truncated (source url).");
+
+                    var sourceUrlLen = ReadUInt16(ptr + cursor);
+                    cursor += 2;
+                    if (cursor + sourceUrlLen > fileLength)
+                        throw new InvalidDataException("RAG file is truncated (source url).");
+                    sourceUrlOffsets[i] = cursor;
+                    sourceUrlLengths[i] = sourceUrlLen;
+                    cursor += sourceUrlLen;
 
                     if (cursor + 8 + 4 > fileLength)
                         throw new InvalidDataException("RAG file is truncated (offset table).");
@@ -128,11 +168,15 @@ public unsafe sealed class RagIndex : IDisposable
                     chunkCount,
                     dim,
                     version,
+                    instructions,
                     textOffsets,
                     textLengths,
+                    sourceUrlOffsets,
+                    sourceUrlLengths,
                     titleOffsets,
                     titleLengths,
-                    textPayloadBase);
+                    textPayloadBase,
+                    vectorBase);
             }
             catch
             {
@@ -209,10 +253,11 @@ public unsafe sealed class RagIndex : IDisposable
             throw new ArgumentOutOfRangeException(nameof(index));
 
         var title = ReadUtf8(_titleOffsets[index], _titleLengths[index]);
+        var sourceUrl = ReadUtf8(_sourceUrlOffsets[index], _sourceUrlLengths[index]);
         var textOffset = checked((long)_textOffsets[index]);
         var textLength = _textLengths[index];
         var text = ReadUtf8(_textPayloadBase + textOffset, textLength);
-        return new RagChunk(index, title, text);
+        return new RagChunk(index, title, sourceUrl, text);
     }
 
     private string ReadUtf8(long offset, uint length)
@@ -238,7 +283,7 @@ public unsafe sealed class RagIndex : IDisposable
 
     public readonly record struct RagHit(int Index, float Score);
 
-    public readonly record struct RagChunk(int Index, string Title, string Text);
+    public readonly record struct RagChunk(int Index, string Title, string SourceUrl, string Text);
 
     private static unsafe float Dot(float* a, float* b, int dim)
     {
