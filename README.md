@@ -33,6 +33,6 @@ The app loads the model, prints a short help, then keeps the conversation until 
 
 ## Optional GPU backends
 
-On Windows, `Aukenid.Core` can auto-enable a CUDA backend at runtime when an NVIDIA driver is present. It downloads the matching `LLamaSharp.Backend.Cuda*.Windows` NuGet package, extracts `runtimes/win-x64/native` into the user's local app-data cache, and prepends that folder to LLamaSharp's native search path.
+On Windows, `Aukenid.Core` can auto-enable a Vulkan backend at runtime when a Vulkan runtime is present **and** the host has bundled the Vulkan-capable llama.cpp natives (via `LLamaSharp.Backend.Vulkan.Windows`) next to the executable.
 
-This is meant to keep the base installer small while still enabling GPU acceleration for non-developers.
+Concretely, the Desktop Windows MSI bundles `LLamaSharpRuntimes/win-x64/native/vulkan/*` under the install directory. `Aukenid.Core` detects that folder and prepends it to LLamaSharp's native search path so the Vulkan DLLs win over the CPU-only natives.

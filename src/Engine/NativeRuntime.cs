@@ -25,10 +25,10 @@ internal static class NativeRuntime
                 return;
             }
 
-            var cudaNative = CudaBackendBootstrapper.TryPrepareNativeDirectory();
+            var vulkanNative = VulkanBackendBootstrapper.TryPrepareNativeDirectory();
 
             var directories = SearchDirectories()
-                .Prepend(cudaNative)
+                .Prepend(vulkanNative)
                 .Where(path => !string.IsNullOrWhiteSpace(path))
                 .Select(path => path!)
                 .Where(Directory.Exists)

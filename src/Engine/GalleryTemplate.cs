@@ -57,6 +57,17 @@ public static partial class GalleryTemplate
         return null;
     }
 
+    public static (string Id, string Url, string? Hash, string? Type, string Template)? FindById(string dataDirectory, string modelId)
+    {
+        var model = FindModel(dataDirectory, modelId, weightsPath: null);
+        if (model is null)
+        {
+            return null;
+        }
+
+        return (model.Id, model.Url, model.Hash, model.Type, model.Template);
+    }
+
     private static ChatTemplate? MatchExact(string? key)
     {
         if (string.IsNullOrWhiteSpace(key))

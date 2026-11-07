@@ -92,8 +92,8 @@ public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
         {
             if (OperatingSystem.IsWindows())
             {
-                // Only enable GPU params if CUDA is actually present + backend natives were prepared.
-                if (CudaBackendBootstrapper.TryPrepareNativeDirectory() is null)
+                // Only enable GPU params if Vulkan is actually present + backend natives were prepared.
+                if (VulkanBackendBootstrapper.TryPrepareNativeDirectory() is null)
                 {
                     return null;
                 }

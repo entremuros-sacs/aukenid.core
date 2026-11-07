@@ -9,7 +9,7 @@ public interface IChatEngine
     /// <summary>Short display name of the currently loaded weights, or null if none is loaded.</summary>
     string? ActiveModelName { get; }
 
-    /// <summary>True when the engine is actively using a GPU backend (CUDA/Metal).</summary>
+    /// <summary>True when the engine is actively using a GPU backend (Vulkan/Metal).</summary>
     bool IsGpuEnabled { get; }
 
     Task LoadModelAsync(string profileId, CancellationToken cancellationToken);
