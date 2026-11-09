@@ -27,12 +27,29 @@ public sealed class WebEnricher
         string? searchText,
         CancellationToken cancellationToken)
     {
+        var pastedUrl = WebContext.FirstPastedHttpUrl(userPrompt)
+            ?? WebContext.FirstPastedHttpsUrlFromBareDomain(userPrompt);
+
+        var queryUrl = NormalizeQueryToUrl(searchText);
+
         IReadOnlyList<WebHit> hits = [];
-        if (!string.IsNullOrWhiteSpace(searchText))
+        var directUrl = pastedUrl ?? queryUrl;
+        if (!string.IsNullOrWhiteSpace(directUrl))
+        {
+            // Even when fetch fails, keep a stable source entry so the assistant can cite it.
+            hits =
+            [
+                new WebHit(TitleFromUrl(directUrl), directUrl, string.Empty, null),
+            ];
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchText) && pastedUrl is null && queryUrl is null)
         {
             hits = await _search.SearchAsync(new SearchQuery(searchText.Trim()), cancellationToken);
         }
-        var fetchUrl = WebContext.FirstPastedHttpUrl(userPrompt)
+
+        var fetchUrl = pastedUrl
+            ?? queryUrl
             ?? hits.Select(h => h.Url).FirstOrDefault(u => !string.IsNullOrWhiteSpace(u));
 
         string? fetchedText = null;
@@ -53,5 +70,34 @@ public sealed class WebEnricher
         }
 
         return (WebContext.TryTurn(hits, fetchUrl, fetchedText), SourceCitations.FromHits(hits));
+    }
+
+    private static string TitleFromUrl(string url)
+    {
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return string.IsNullOrWhiteSpace(uri.Host) ? url : uri.Host;
+        }
+
+        return url;
+    }
+
+    private static string? NormalizeQueryToUrl(string? query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return null;
+        }
+
+        var trimmed = query.Trim();
+        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var absolute)
+            && (absolute.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase)
+                || absolute.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase)))
+        {
+            return trimmed;
+        }
+
+        // Treat a bare domain used as q as a fetch target.
+        return WebContext.FirstPastedHttpsUrlFromBareDomain(trimmed);
     }
 }

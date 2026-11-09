@@ -24,6 +24,15 @@ public sealed class ToolRouterTests
     }
 
     [TestMethod]
+    public void HardSignals_BareDomainSelectsWeb()
+    {
+        var plan = ToolRouter.HardSignals("Look at aukenid.com");
+        Assert.IsTrue(plan.Web);
+        Assert.IsFalse(plan.Scholar);
+        Assert.IsFalse(plan.Wiki);
+    }
+
+    [TestMethod]
     public void HardSignals_IgnoresNaturalLanguage()
     {
         var plan = ToolRouter.HardSignals("Dame una lista de variantes de modelos AI Gemma");

@@ -15,6 +15,7 @@ using System.Text;
 internal enum PromptKey
 {
     ToolRouterSystem,
+    ToolQueryRewriteSystem,
     ThreadSummaryNote,
     ThreadSummarySystem,
     DocumentGuidance,

@@ -34,7 +34,8 @@ public static partial class ToolRouter
         var doi = ScholarContext.FirstDoi(prompt) is not null;
         var arxiv = ArxivId().IsMatch(prompt);
         var pubmed = PubmedId().IsMatch(prompt);
-        var url = WebContext.FirstPastedHttpUrl(prompt);
+        var url = WebContext.FirstPastedHttpUrl(prompt)
+            ?? WebContext.FirstPastedHttpsUrlFromBareDomain(prompt);
         var publicUrl = url is not null && (!doi || url.Contains("doi.org", StringComparison.OrdinalIgnoreCase) is false);
 
         return Cap(wiki: false, scholar: doi || arxiv || pubmed, web: publicUrl);
@@ -220,7 +221,8 @@ public static partial class ToolRouter
         var query = plan.Query;
         if (plan.Web && string.IsNullOrWhiteSpace(query))
         {
-            var url = WebContext.FirstPastedHttpUrl(prompt);
+            var url = WebContext.FirstPastedHttpUrl(prompt)
+                ?? WebContext.FirstPastedHttpsUrlFromBareDomain(prompt);
             if (url is not null)
             {
                 query = url;

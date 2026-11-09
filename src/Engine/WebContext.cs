@@ -16,6 +16,10 @@ public static partial class WebContext
     [GeneratedRegex(@"https?://[^\s<>""']+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex HttpUrl();
 
+    // Bare domains (optionally with a path) for prompts like "look at aukenid.com".
+    [GeneratedRegex(@"\b([A-Za-z0-9][A-Za-z0-9-]{0,62}\.[A-Za-z]{2,3}(?:/[^\s<>""']*)?)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex BareDomain();
+
     public static ChatTurn? TryTurn(
         IReadOnlyList<WebHit> hits,
         string? fetchedUrl,
@@ -74,6 +78,40 @@ public static partial class WebContext
     {
         var match = HttpUrl().Match(prompt);
         return match.Success ? match.Value.TrimEnd(").,;".ToCharArray()) : null;
+    }
+
+    public static string? FirstPastedHttpsUrlFromBareDomain(string prompt)
+    {
+        // If the user already pasted a full URL, don't second-guess it.
+        if (FirstPastedHttpUrl(prompt) is not null)
+        {
+            return null;
+        }
+
+        var match = BareDomain().Match(prompt);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        var value = match.Groups[1].Value.TrimEnd(").,;:".ToCharArray());
+        if (value.Length == 0)
+        {
+            return null;
+        }
+
+        // Avoid matching emails (the regex would match the domain part).
+        var at = prompt.IndexOf('@', StringComparison.Ordinal);
+        if (at >= 0)
+        {
+            var domainStart = match.Index;
+            if (at < domainStart && domainStart - at <= 64)
+            {
+                return null;
+            }
+        }
+
+        return "https://" + value;
     }
 
     private static void AppendCapped(StringBuilder sb, string text, int maxTotalChars)

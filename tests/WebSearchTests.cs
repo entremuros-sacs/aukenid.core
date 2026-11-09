@@ -142,4 +142,15 @@ public sealed class WebSearchTests
     {
         Assert.AreEqual(expected, WebContext.FirstPastedHttpUrl(prompt));
     }
+
+    [TestMethod]
+    [DataRow("look at aukenid.com", "https://aukenid.com")]
+    [DataRow("aukenid.com/index.html", "https://aukenid.com/index.html")]
+    [DataRow("(aukenid.com).", "https://aukenid.com")]
+    [DataRow("already https://aukenid.com", null)]
+    [DataRow("email me at test@aukenid.com", null)]
+    public void FirstPastedHttpsUrlFromBareDomain_ExtractsBareDomains(string prompt, string? expected)
+    {
+        Assert.AreEqual(expected, WebContext.FirstPastedHttpsUrlFromBareDomain(prompt));
+    }
 }
