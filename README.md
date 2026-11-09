@@ -1,6 +1,6 @@
 # Aukenid.Core
 
-Source code of the core component of Aukenid AI:  local GGUF chat, conversation storage, attachments, and web/wiki/scholar tools.
+Source code of the core component of [Aukenid AI](https://aukenid.com):  local GGUF chat, conversation storage, attachments, and web/wiki/scholar tools.
 
 License: PolyForm Strict License 1.0.0 (see `LICENSE`).
 
