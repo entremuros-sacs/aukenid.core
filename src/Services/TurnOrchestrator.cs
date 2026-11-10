@@ -20,6 +20,7 @@ public sealed class TurnOrchestrator
 {
     private const int DocumentProgressReportChars = 24;
     private const int SummaryTailMessages = 12;
+    private static readonly ChatTurn ChatStyleTurn = PromptLibrary.ChatStyleTurn();
 
     private static readonly ChatTurn CodeExplanationTurn = PromptLibrary.CodeExplanationTurn();
 
@@ -57,6 +58,7 @@ public sealed class TurnOrchestrator
         string Content,
         bool IsFirstMessage,
         bool AlreadyHaveUserMessage,
+        bool DocumentPanelOpen,
         IReadOnlyList<MessageDto> ExistingMessages,
         IReadOnlyList<string> StoredAttachmentNames);
 
@@ -109,6 +111,33 @@ public sealed class TurnOrchestrator
             plan = plan with { Steps = plan.Steps & ~ToolRouter.PlanKind.NewTopic };
         }
 
+        // UX preference: while the document panel is open, treat the turn as part of the document
+        // workflow by default, even if the user's message doesn't explicitly mention the panel.
+        // This keeps the system from "forgetting" document mode between clarification turns.
+        if (input.DocumentPanelOpen)
+        {
+            plan = plan with
+            {
+                Steps = (plan.Steps | ToolRouter.PlanKind.Document) & ~ToolRouter.PlanKind.NewTopic,
+                // Do NOT force Chat here: document mode should default to document-only unless the
+                // user explicitly asked for a chat response.
+                Intents = (plan.Intents | ToolRouter.IntentKind.Document) & ~ToolRouter.IntentKind.NewTopic,
+            };
+        }
+
+        // Deterministic guardrail: local models can get stuck asking clarification after
+        // clarification instead of drafting. If we're in document mode and we already asked enough
+        // questions recently, proceed to draft with reasonable defaults.
+        if (plan.ClarifyInChat && plan.Document && input.DocumentPanelOpen && TooManyRecentClarifications(input.ExistingMessages, input.ParentId))
+        {
+            plan = plan with
+            {
+                Steps = plan.Steps & ~ToolRouter.PlanKind.ClarifyInChat,
+                Intents = plan.Intents & ~ToolRouter.IntentKind.NeedClarification,
+                ClarificationQuestion = null,
+            };
+        }
+
         var documentOnly = plan.Document
             && plan.HasIntent(ToolRouter.IntentKind.Document)
             && !plan.HasIntent(ToolRouter.IntentKind.Chat);
@@ -116,7 +145,7 @@ public sealed class TurnOrchestrator
         if (plan.ClarifyInChat)
         {
             content = string.IsNullOrWhiteSpace(plan.ClarificationQuestion)
-                ? "Can you clarify what you want me to do?"
+                ? await GenerateFallbackClarificationAsync(input.Content, cancellationToken)
                 : plan.ClarificationQuestion;
         }
 
@@ -132,6 +161,11 @@ public sealed class TurnOrchestrator
 
         if (plan.ClarifyInChat)
         {
+	        if (plan.Document)
+	        {
+	            EnsureDocumentOpened(events, input.ThreadId);
+	        }
+
             return new TurnResult(content, citations, toolWarning, plan);
         }
 
@@ -289,18 +323,56 @@ public sealed class TurnOrchestrator
                     InsertBeforeLastUser(turns, DocumentTool.GuidanceTurn());
                 }
 
-                await foreach (var token in _chatEngine.StreamAsync(turns, cancellationToken))
+                // Safety: when a document write is happening, some local models ignore
+                // DocumentGuidance and dump the whole draft into the chat stream. If we streamed
+                // token-by-token, we couldn't retract it after the fact.
+                //
+                // So for document workflows, buffer the full reply first, then coerce it into a
+                // short confirmation if needed, and only then emit it to the UI.
+                if (plan.Document)
                 {
-                    content += token;
-                    if (token.Length > 0)
+                    content = await _chatEngine.CompleteAsync(turns, cancellationToken);
+
+                    var rawReply = content;
+                    content = CoerceDocumentChatReply(rawReply);
+                    if (string.IsNullOrWhiteSpace(content))
                     {
-                        events.Emit(new TokenEvent(input.ThreadId, input.AssistantMessageId, token));
+                        // Retry once to get a properly formatted chat reply (see DocumentGuidance).
+                        var repairTurns = turns.ToList();
+                        repairTurns.Add(new ChatTurn(
+                            "user",
+                            "Your previous response did not follow the required >>> CHAT / <<< END format. "
+	                            + "Rewrite the same intended chat reply using ONLY that CHAT block (no other text).\n\nPrevious response:\n" + rawReply));
+
+                        var repaired = await _chatEngine.CompleteAsync(repairTurns, cancellationToken);
+                        content = CoerceDocumentChatReply(repaired);
+                    }
+
+                    if (string.IsNullOrWhiteSpace(content))
+                    {
+                        content = await GenerateDocumentConfirmationAsync(input.Content, cancellationToken);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(content))
+                    {
+                        events.Emit(new TokenEvent(input.ThreadId, input.AssistantMessageId, content));
+                    }
+                }
+                else
+                {
+                    await foreach (var token in _chatEngine.StreamAsync(turns, cancellationToken))
+                    {
+                        content += token;
+                        if (token.Length > 0)
+                        {
+                            events.Emit(new TokenEvent(input.ThreadId, input.AssistantMessageId, token));
+                        }
                     }
                 }
 
                 toolWarning ??= _chatEngine.StreamNoticeKey;
 
-                if (citations.Count > 0 && !string.IsNullOrWhiteSpace(content) && toolWarning is null)
+                if (!plan.Document && citations.Count > 0 && !string.IsNullOrWhiteSpace(content) && toolWarning is null)
                 {
                     content = SourceCitations.Append(content, citations);
                 }
@@ -309,9 +381,20 @@ public sealed class TurnOrchestrator
 
         if (plan.Document)
         {
+            // If the chat completion itself is asking a follow-up question, we are still in the
+            // clarification stage. Do not generate/overwrite document content yet; keep (or create)
+            // the blank document so the panel stays available.
+            if (!plan.ClarifyInChat && LooksLikeQuestion(content))
+            {
+                EnsureDocumentOpened(events, input.ThreadId);
+                return new TurnResult(content, citations, toolWarning, plan);
+            }
+
             var documentTurns = ActivePath.ToTurns(_conversationStore.ListMessages(input.ThreadId), input.UserMessageId)
                 .TakeLast(7)
                 .ToList();
+
+            documentTurns = FilterDocumentTurns(documentTurns);
             var documentNotice = await ApplyDocumentCommandAsync(
                 events,
                 input.ThreadId,
@@ -324,6 +407,74 @@ public sealed class TurnOrchestrator
         }
 
         return new TurnResult(content, citations, toolWarning, plan);
+    }
+
+	private void EnsureDocumentOpened(ITurnEventSink events, string threadId)
+	{
+	    var existing = _conversationStore.ReadDocument(threadId);
+	    if (existing is null)
+	    {
+	        // A blank file is enough to mark HasDocument=true for UI state.
+	        if (!_conversationStore.SaveDocument(threadId, string.Empty))
+	        {
+	            return;
+	        }
+
+	        existing = string.Empty;
+	    }
+
+	    // Send updated thread metadata first so the UI can treat the document as "existing".
+	    events.Emit(new ThreadsListEvent(threadId, _conversationStore.ListThreads()));
+	    events.Emit(new DocumentOpenEvent(threadId, existing, Exists: true));
+	    events.Emit(new DocumentVersionsListEvent(threadId, _conversationStore.ListDocumentVersions(threadId)));
+	}
+
+    private static bool TooManyRecentClarifications(IReadOnlyList<MessageDto> priorMessages, string? parentId)
+    {
+        if (string.IsNullOrWhiteSpace(parentId) || priorMessages.Count == 0)
+        {
+            return false;
+        }
+
+        // Walk the active path and count recent assistant questions.
+        var turns = ActivePath.ToTurns(priorMessages, parentId).TakeLast(12);
+        var questions = 0;
+        foreach (var turn in turns)
+        {
+            if (turn.Role == "assistant" && LooksLikeQuestion(turn.Content))
+            {
+                questions++;
+            }
+        }
+
+        // After one clarification, proceed to draft instead of looping.
+        return questions >= 1;
+    }
+
+    private async Task<string> GenerateFallbackClarificationAsync(string userPrompt, CancellationToken cancellationToken)
+    {
+        var turns = new List<ChatTurn>
+        {
+            ChatStyleTurn,
+            PromptLibrary.RuntimeContextTurn(DateTimeOffset.Now),
+            new("user", "Ask ONE concise clarification question to proceed. Reply with ONLY the question text.\n\nUser message:\n" + userPrompt),
+        };
+
+        var question = await _chatEngine.CompleteAsync(turns, cancellationToken);
+        return string.IsNullOrWhiteSpace(question) ? "?" : question.Trim();
+    }
+
+    private async Task<string> GenerateDocumentConfirmationAsync(string userPrompt, CancellationToken cancellationToken)
+    {
+        var turns = new List<ChatTurn>
+        {
+            ChatStyleTurn,
+            PromptLibrary.RuntimeContextTurn(DateTimeOffset.Now),
+            new("user", "Reply with ONE short sentence confirming you updated the side document panel. Do not include the document body.\n\nUser message:\n" + userPrompt),
+        };
+
+        var reply = await _chatEngine.CompleteAsync(turns, cancellationToken);
+        return string.IsNullOrWhiteSpace(reply) ? "OK." : reply.Trim();
     }
 
     private readonly record struct AttachmentSlot(string Name, IReadOnlyList<string>? Notes);
@@ -564,6 +715,10 @@ public sealed class TurnOrchestrator
             turns.Add(CodeExplanationTurn);
         }
 
+        // Keep behavior consistent and deterministic across all model calls.
+        turns.Insert(0, PromptLibrary.RuntimeContextTurn(DateTimeOffset.Now));
+        turns.Insert(0, ChatStyleTurn);
+
         return turns;
     }
 
@@ -587,7 +742,6 @@ public sealed class TurnOrchestrator
             || lastUser.Contains("stack trace", StringComparison.OrdinalIgnoreCase)
             || lastUser.Contains("exception", StringComparison.OrdinalIgnoreCase);
     }
-
     private async Task<string?> ApplyDocumentCommandAsync(
         ITurnEventSink events,
         string threadId,
@@ -617,12 +771,35 @@ public sealed class TurnOrchestrator
                 var editPrompt = DocumentEditOrchestrator.BuildEditTurns(documentTurns, currentDocument, attachmentExcerpts);
                 var editResponse = await StreamDocumentAsync(events, threadId, editPrompt.Turns, cancellationToken);
                 patched = DocumentEditOrchestrator.TryApplyPatch(editResponse, editPrompt.Chunks, editPrompt.EditableIds);
+
+                if (patched is null)
+                {
+                    // Common failure mode on small local models: the intent is correct, but the
+                    // response contains extra prose instead of the strict >>> EDIT blocks.
+                    // Retry once by asking the model to re-express the same edits in the protocol.
+                    var repairTurns = editPrompt.Turns.ToList();
+                    repairTurns.Add(new ChatTurn(
+                        "user",
+                        "Your previous response could not be applied because it did not follow the required EDIT block format. "
+                        + "Rewrite the same intended changes as EDIT blocks ONLY (no other text).\n\nPrevious response:\n" + editResponse));
+
+                    var repaired = await StreamDocumentAsync(events, threadId, repairTurns, cancellationToken);
+                    patched = DocumentEditOrchestrator.TryApplyPatch(repaired, editPrompt.Chunks, editPrompt.EditableIds);
+                }
             }
 
             DocumentTool.Result result;
             if (patched is not null)
             {
                 result = _documentTool.ApplyResolvedContent(threadId, patched);
+            }
+            else if (hasExistingDocument)
+            {
+                // No safe fallback: if the strict edit protocol fails twice (original + repair),
+                // do not overwrite the user's document with a best-effort regeneration.
+                // This avoids corrupting the draft (e.g. duplicated sections) when the model emits
+                // full-document prose instead of protocol edits.
+                return NoticeKeys.DocumentUpdateFailed;
             }
             else
             {
@@ -642,7 +819,6 @@ public sealed class TurnOrchestrator
             return NoticeKeys.DocumentUpdateFailed;
         }
     }
-
     private string? FinishDocumentWrite(ITurnEventSink events, string threadId, DocumentTool.Result result)
     {
         if (!result.Applied || string.IsNullOrWhiteSpace(result.Content) || result.Versions is null)
@@ -673,6 +849,39 @@ public sealed class TurnOrchestrator
         return generated.ToString();
     }
 
+    private static List<ChatTurn> FilterDocumentTurns(IReadOnlyList<ChatTurn> turns)
+    {
+        if (turns.Count == 0)
+        {
+            return [];
+        }
+
+        // Prevent accidental "conversation" text from showing up in the generated document by
+        // excluding assistant clarification questions from the document-generation context.
+        var filtered = new List<ChatTurn>(turns.Count);
+        foreach (var turn in turns)
+        {
+            if (turn.Role == "assistant" && LooksLikeQuestion(turn.Content))
+            {
+                continue;
+            }
+
+            filtered.Add(turn);
+        }
+
+        return filtered;
+    }
+
+    private static bool LooksLikeQuestion(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        return text.Contains('?', StringComparison.Ordinal) || text.Contains('¿', StringComparison.Ordinal);
+    }
+
     public static bool IsContextOverflow(Exception ex)
     {
         for (var current = ex; current is not null; current = current.InnerException)
@@ -684,6 +893,39 @@ public sealed class TurnOrchestrator
         }
 
         return false;
+    }
+
+    private static string? CoerceDocumentChatReply(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        // Deterministic: prefer extracting the explicit CHAT envelope.
+        const string start = ">>> CHAT";
+        const string end = "<<< END";
+        var startIndex = raw.IndexOf(start, StringComparison.Ordinal);
+        if (startIndex >= 0)
+        {
+            var endIndex = raw.IndexOf(end, startIndex, StringComparison.Ordinal);
+            if (endIndex > startIndex)
+            {
+                var innerStart = startIndex + start.Length;
+                var inner = raw[innerStart..endIndex].Trim();
+                return inner.Length == 0 ? null : inner;
+            }
+        }
+
+        // Back-compat safety: accept a short single-paragraph reply as-is.
+        // This is not content-specific (poem/memo/report/etc), only structural.
+        var trimmed = raw.Trim();
+        if (!trimmed.Contains('\n', StringComparison.Ordinal) && trimmed.Length <= 240)
+        {
+            return trimmed;
+        }
+
+        return null;
     }
 
     public static string? DeriveTitle(string prompt)

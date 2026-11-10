@@ -273,6 +273,8 @@ public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
                 // parsing (and silently dropped folder/newTopic to their fallback defaults).
                 var routePrompt = FormatTurns(
                 [
+                    new ChatTurn("system", PromptLibrary.Get(PromptKey.ChatStyleSystem)),
+                    PromptLibrary.RuntimeContextTurn(DateTimeOffset.Now),
                     new ChatTurn("system", PromptLibrary.Get(PromptKey.ToolRouterSystem)),
                     new ChatTurn("user", BuildRouteUserTurn(recentTurns, prompt)),
                 ]);
@@ -337,8 +339,10 @@ public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
             {
                 var titlePrompt = FormatTurns(
                 [
-                    new ChatTurn("user", "Reply with only a short 3 to 6 word topic title (no quotes, no trailing "
-                        + $"punctuation) describing what this message is about:\n\n{prompt}"),
+                    new ChatTurn("system", PromptLibrary.Get(PromptKey.ChatStyleSystem)),
+                    PromptLibrary.RuntimeContextTurn(DateTimeOffset.Now),
+                    new ChatTurn("user", "Reply with only a short 3 to 6 word topic title (no quotes, no trailing punctuation). "
+                        + "Use the SAME language as the message. Do not translate.\n\nMessage:\n" + prompt),
                 ]);
                 var inferenceParams = new InferenceParams { MaxTokens = 16 };
 

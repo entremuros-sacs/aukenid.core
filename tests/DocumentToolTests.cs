@@ -21,14 +21,18 @@ public sealed class DocumentToolTests
 
         var turns = DocumentTool.GenerationTurns(recentTurns, "# Recipe\nIngredients...", []);
 
-        Assert.AreEqual(5, turns.Count);
+        Assert.AreEqual(8, turns.Count);
         Assert.AreEqual("system", turns[0].Role);
-        Assert.AreEqual("user", turns[1].Role);
-        Assert.AreEqual("assistant", turns[2].Role);
+        Assert.AreEqual("system", turns[1].Role);
+        Assert.AreEqual("system", turns[2].Role);
         Assert.AreEqual("system", turns[3].Role);
-        Assert.IsTrue(turns[3].Content.Contains("Current document:", StringComparison.Ordinal));
+        Assert.IsTrue(turns[3].Content.StartsWith("Language anchor:", StringComparison.Ordinal));
         Assert.AreEqual("user", turns[4].Role);
-        Assert.AreEqual("Tradúcela al francés", turns[4].Content);
+        Assert.AreEqual("assistant", turns[5].Role);
+        Assert.AreEqual("system", turns[6].Role);
+        Assert.IsTrue(turns[6].Content.Contains("Current document:", StringComparison.Ordinal));
+        Assert.AreEqual("user", turns[7].Role);
+        Assert.AreEqual("Tradúcela al francés", turns[7].Content);
     }
 
     [TestMethod]
@@ -50,7 +54,24 @@ public sealed class DocumentToolTests
 
         var turns = DocumentTool.GenerationTurns(recentTurns, null, []);
 
-        Assert.AreEqual(2, turns.Count);
+        Assert.AreEqual(5, turns.Count);
+    }
+
+    [TestMethod]
+    public void GenerationTurns_AddsLanguageAnchorFromLastUserMessage()
+    {
+        var recentTurns = new[]
+        {
+            new ChatTurn("user", "Escribe un poema"),
+            new ChatTurn("assistant", "Ok"),
+            new ChatTurn("user", "Hazlo en español, por favor."),
+        };
+
+        var turns = DocumentTool.GenerationTurns(recentTurns, null, []);
+
+        var anchor = turns.FirstOrDefault(t => t.Role == "system" && t.Content.StartsWith("Language anchor:", StringComparison.Ordinal));
+        Assert.IsNotNull(anchor);
+        Assert.IsTrue(anchor.Content.Contains("Hazlo en español", StringComparison.Ordinal));
     }
 
     [TestMethod]

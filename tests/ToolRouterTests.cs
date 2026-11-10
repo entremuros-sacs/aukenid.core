@@ -123,7 +123,7 @@ public sealed class ToolRouterTests
     public void PlanForTurn_DocumentPlusAnswerInChat_AddsChatIntent()
     {
         var detection = new ToolRouter.IntentDetection(
-            ToolRouter.IntentKind.Document,
+            ToolRouter.IntentKind.Document | ToolRouter.IntentKind.Chat,
             Query: null,
             Folder: true,
             NewTopic: false,
@@ -139,7 +139,15 @@ public sealed class ToolRouterTests
     [TestMethod]
     public void PlanForTurn_ConsumerCuriosity_DefaultsToChatPlusWebSearch()
     {
-        var detection = ToolRouter.IntentDetection.Default;
+        var detection = new ToolRouter.IntentDetection(
+            ToolRouter.IntentKind.Chat | ToolRouter.IntentKind.SearchWeb,
+            Query: "Aukenid",
+            Folder: true,
+            NewTopic: false,
+            DocumentVerbatim: false,
+            Explicit: true,
+            ClarificationQuestion: null);
+
         var plan = ToolRouter.PlanForTurn("qué sabes de Aukenid?", detection, hasAttachments: false);
         Assert.IsTrue(plan.Web);
         Assert.IsTrue(plan.HasIntent(ToolRouter.IntentKind.Chat));
@@ -147,13 +155,15 @@ public sealed class ToolRouterTests
     }
 
     [TestMethod]
-    public void PlanForTurn_NewTopicBackstop_FiresWhenNoSignificantWordsOverlap()
+    public void PlanForTurn_ClarificationAnswer_DoesNotTriggerNewTopicAndKeepsDocumentWorkflow()
     {
         var detection = ToolRouter.IntentDetection.Default;
-        var history = new[] { new ChatTurn("user", "Tell me something about the Jev AI model") };
-        var plan = ToolRouter.PlanForTurn("What services does Azure offer for a cloud aggregation service", detection, hasAttachments: false, history);
-        Assert.IsTrue(plan.NewTopic);
-        Assert.IsTrue(plan.HasIntent(ToolRouter.IntentKind.NewTopic));
+        var history = new[] { new ChatTurn("assistant", "What should I put in the document panel?") };
+
+        var plan = ToolRouter.PlanForTurn("Un memorándum interno sobre el roadmap.", detection, hasAttachments: false, history);
+
+        Assert.IsFalse(plan.NewTopic);
+        Assert.IsTrue(plan.HasIntent(ToolRouter.IntentKind.Chat));
     }
 }
 

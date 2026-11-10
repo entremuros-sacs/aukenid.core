@@ -35,7 +35,7 @@ public sealed class DocumentChunkerTests
         Assert.AreEqual(chunks.Count, chunks.Select(c => c.Id).Distinct().Count());
         foreach (var chunk in chunks)
         {
-            Assert.AreEqual(5, chunk.Id.Length);
+            Assert.AreEqual(8, chunk.Id.Length);
         }
     }
 

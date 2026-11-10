@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text;
 using Markdig;
 using Markdig.Extensions.Tables;
 using Markdig.Syntax;
@@ -22,12 +23,12 @@ public static class DocumentChunker
     public const int ChunkBudgetChars = 1200;
     private const int SectionHeadingMaxLevel = 3;
 
-    // Short, random, and sparse on purpose (see ADR-26): long enough that a garbled id from the model
+    // Deterministic and sparse on purpose (see ADR-26): long enough that a garbled id from the model
     // overwhelmingly matches no real chunk (a safe, catchable failure) rather than accidentally
     // colliding with a different real chunk (a silent, wrong-chunk edit) - unlike short sequential
     // integers, where an off-by-one typo is just as "valid-looking" as the intended id.
     private const string IdAlphabet = "23456789abcdefghjkmnpqrstuvwxyz";
-    private const int IdLength = 5;
+    private const int IdLength = 8;
 
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
         .UsePipeTables()
@@ -130,7 +131,11 @@ public static class DocumentChunker
         var start = blocks[0].Span.Start;
         var length = blocks[^1].Span.End - start + 1;
         var text = length > 0 ? document.Substring(start, length).Trim() : string.Empty;
-        return new DocumentChunk(NextId(usedIds), ClassifyKind(blocks), headingPath, text);
+
+        var kind = ClassifyKind(blocks);
+        var seed = $"{headingPath ?? string.Empty}|{kind}|{start}|{length}";
+
+        return new DocumentChunk(NextId(seed, usedIds), kind, headingPath, text);
     }
 
     private static DocumentChunkKind ClassifyKind(List<Block> blocks)
@@ -152,14 +157,17 @@ public static class DocumentChunker
 
     private static int SpanLength(List<Block> blocks) => Math.Max(0, blocks[^1].Span.End - blocks[0].Span.Start + 1);
 
-    private static string NextId(HashSet<string> usedIds)
+    private static string NextId(string seed, HashSet<string> usedIds)
     {
         Span<char> buffer = stackalloc char[IdLength];
-        while (true)
+        for (var attempt = 0; attempt < 32; attempt++)
         {
+            var data = Encoding.UTF8.GetBytes(seed + "#" + attempt.ToString());
+            var hash = SHA256.HashData(data);
+
             for (var i = 0; i < IdLength; i++)
             {
-                buffer[i] = IdAlphabet[RandomNumberGenerator.GetInt32(IdAlphabet.Length)];
+                buffer[i] = IdAlphabet[hash[i] % IdAlphabet.Length];
             }
 
             var id = new string(buffer);
@@ -168,5 +176,8 @@ public static class DocumentChunker
                 return id;
             }
         }
+
+        // Fallback: should be unreachable.
+        return Guid.NewGuid().ToString("N")[..IdLength];
     }
 }

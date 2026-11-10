@@ -269,6 +269,7 @@ internal sealed class CliApp
 	                text,
 	                isFirstMessage,
 	                AlreadyHaveUserMessage: false,
+	                DocumentPanelOpen: false,
 	                ExistingMessages: existing,
 	                StoredAttachmentNames: storedAttachments),
 	            new CliTurnEventSink(),

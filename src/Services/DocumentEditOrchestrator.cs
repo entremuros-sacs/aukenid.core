@@ -32,7 +32,15 @@ public static partial class DocumentEditOrchestrator
         IReadOnlyList<AttachmentExcerpt> attachmentExcerpts)
     {
         var chunks = DocumentChunker.Chunk(currentDocument);
-        var turns = new List<ChatTurn> { new("system", PromptLibrary.Get(PromptKey.DocumentChunkEditSystem)) };
+        var turns = new List<ChatTurn>();
+        turns.AddRange(PromptLibrary.StandardPrefixTurns(DateTimeOffset.Now));
+        turns.Add(new("system", PromptLibrary.Get(PromptKey.DocumentChunkEditSystem)));
+
+	        var languageAnchor = DocumentTool.BuildLanguageAnchor(recentTurns, forEditBlocks: true);
+        if (languageAnchor is not null)
+        {
+            turns.Add(new("system", languageAnchor));
+        }
         turns.AddRange(recentTurns);
 
         var (outline, editableIds) = BuildOutline(chunks);
@@ -50,8 +58,8 @@ public static partial class DocumentEditOrchestrator
             turns.Add(contextTurn);
         }
 
-        return new EditPrompt(turns, chunks, editableIds);
-    }
+	        return new EditPrompt(turns, chunks, editableIds);
+	    }
 
     private static (string Outline, HashSet<string> EditableIds) BuildOutline(IReadOnlyList<DocumentChunk> chunks)
     {

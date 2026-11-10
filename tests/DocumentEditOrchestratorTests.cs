@@ -15,6 +15,7 @@ public sealed class DocumentEditOrchestratorTests
         var result = DocumentEditOrchestrator.BuildEditTurns([new ChatTurn("user", "add a step")], Doc, []);
 
         Assert.AreEqual("system", result.Turns[0].Role);
+        Assert.IsTrue(result.Turns.Any(t => t.Role == "system" && t.Content.StartsWith("Language anchor:", StringComparison.Ordinal)));
         Assert.IsTrue(result.Turns[^2].Content.Contains(">>> CHUNK", StringComparison.Ordinal));
         Assert.AreEqual(3, result.Chunks.Count);
         Assert.AreEqual(3, result.EditableIds.Count);

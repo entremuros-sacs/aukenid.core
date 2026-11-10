@@ -16,6 +16,7 @@ internal enum PromptKey
 {
     ToolRouterSystem,
     ToolQueryRewriteSystem,
+    ChatStyleSystem,
     ThreadSummaryNote,
     ThreadSummarySystem,
     DocumentGuidance,
@@ -51,6 +52,30 @@ public static class PromptLibrary
     /// which <see cref="PromptKey"/> backs it.
     /// </summary>
     public static ChatTurn CodeExplanationTurn() => new("system", Get(PromptKey.CodeExplanation));
+
+    public static ChatTurn ChatStyleTurn() => new("system", Get(PromptKey.ChatStyleSystem));
+
+    /// <summary>
+    /// Runtime facts the model may need for any workflow (chat, routing, document, retrieval):
+    /// "today", "now", timestamps, deadlines, etc.
+    /// </summary>
+    public static ChatTurn RuntimeContextTurn(DateTimeOffset now)
+        => new(
+            "system",
+            $"Runtime context: now={now:yyyy-MM-dd HH:mm} offset={now:zzz}. Use this for 'today', 'now', current date/time, and deadlines.");
+
+    public static IReadOnlyList<ChatTurn> StandardPrefixTurns(DateTimeOffset now) =>
+    [
+        ChatStyleTurn(),
+        RuntimeContextTurn(now),
+    ];
+
+    public static void PrependStandardPrefix(List<ChatTurn> turns, DateTimeOffset now)
+    {
+        // Insert in reverse so the final order is Style -> Runtime.
+        turns.Insert(0, RuntimeContextTurn(now));
+        turns.Insert(0, ChatStyleTurn());
+    }
 
     public static ChatTurn ThreadSummaryNoteTurn(string summary) => new(
         "system",

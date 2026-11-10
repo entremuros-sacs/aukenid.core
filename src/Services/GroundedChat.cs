@@ -64,9 +64,18 @@ public sealed class GroundedChat
 
         if (plan.ClarifyInChat)
         {
-            var question = string.IsNullOrWhiteSpace(plan.ClarificationQuestion)
-                ? "Can you clarify what you want me to do?"
-                : plan.ClarificationQuestion;
+            var question = plan.ClarificationQuestion;
+            if (string.IsNullOrWhiteSpace(question))
+            {
+                question = await engine.CompleteAsync(
+                    [
+                        PromptLibrary.ChatStyleTurn(),
+                        new ChatTurn("user", "Ask ONE concise clarification question to proceed. Reply with ONLY the question text.\n\nUser message:\n" + userText),
+                    ],
+                    cancellationToken);
+            }
+
+            question = string.IsNullOrWhiteSpace(question) ? "?" : question.Trim();
             conversation.Add(new ChatTurn("assistant", question));
             return new GroundedReply(question, plan, [], null);
         }
@@ -76,6 +85,7 @@ public sealed class GroundedChat
         }
 
         var turns = conversation.ToList();
+        PromptLibrary.PrependStandardPrefix(turns, DateTimeOffset.Now);
         if (injectBeforeLastUser is not null)
         {
             foreach (var extra in injectBeforeLastUser(plan))

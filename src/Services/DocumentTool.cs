@@ -1,5 +1,6 @@
 namespace Aukenid.Core.Services;
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -56,10 +57,15 @@ public sealed class DocumentTool
         string? currentDocument,
         IReadOnlyList<AttachmentExcerpt> attachmentExcerpts)
     {
-        var turns = new List<ChatTurn>
+        var turns = new List<ChatTurn>();
+        turns.AddRange(PromptLibrary.StandardPrefixTurns(DateTimeOffset.Now));
+        turns.Add(new("system", PromptLibrary.Get(PromptKey.DocumentGenerationSystem)));
+
+        var languageAnchor = BuildLanguageAnchor(recentTurns, forEditBlocks: false);
+        if (languageAnchor is not null)
         {
-            new("system", PromptLibrary.Get(PromptKey.DocumentGenerationSystem)),
-        };
+            turns.Add(new("system", languageAnchor));
+        }
 
         turns.AddRange(recentTurns);
 
@@ -78,6 +84,34 @@ public sealed class DocumentTool
         }
 
         return turns;
+    }
+
+    internal static string? BuildLanguageAnchor(IReadOnlyList<ChatTurn> recentTurns, bool forEditBlocks)
+    {
+        // Deterministic and multilingual: anchor the language to the verbatim last user message.
+        // Avoid heuristics like "detect Spanish"; instead tell the model to match the language of
+        // this exact text.
+        for (var i = recentTurns.Count - 1; i >= 0; i--)
+        {
+            if (recentTurns[i].Role == "user" && !string.IsNullOrWhiteSpace(recentTurns[i].Content))
+            {
+                var sample = recentTurns[i].Content.Trim();
+                const int max = 240;
+                if (sample.Length > max)
+                {
+                    sample = sample[..max];
+                }
+
+                if (forEditBlocks)
+                {
+                    return "Language anchor: Output ONLY EDIT blocks, but write any natural-language text inside them in the SAME language as this user message (verbatim):\n" + sample;
+                }
+
+                return "Language anchor: Write the document in the SAME language as this user message (verbatim):\n" + sample;
+            }
+        }
+
+        return null;
     }
 
     private static string? BuildContextBlock(string? currentDocument, IReadOnlyList<AttachmentExcerpt> attachmentExcerpts)

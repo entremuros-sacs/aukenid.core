@@ -87,16 +87,16 @@ public static partial class ToolRouter
             return IntentDetection.Default;
         }
 
-        var json = JsonObject().Match(raw);
-        if (!json.Success)
+        var json = TryExtractJsonObject(raw);
+        if (json is null)
         {
             return IntentDetection.Default;
         }
 
         try
         {
-            using var document = JsonDocument.Parse(json.Value);
-            var root = document.RootElement;
+            using var jsonDoc = JsonDocument.Parse(json);
+            var root = jsonDoc.RootElement;
 
             if (!root.TryGetProperty("schema", out var schema) || schema.ValueKind != JsonValueKind.String)
             {
@@ -134,6 +134,18 @@ public static partial class ToolRouter
         var intents = detection.Intents;
         var query = detection.Query;
 
+        // Deterministic continuation: if the assistant just asked a question (typical clarification
+        // step) and the user is replying, do NOT treat it as a new topic. If that question was
+        // specifically about the document panel, also default to producing a chat reply while
+        // proceeding with the document workflow.
+        var turns = recentTurns ?? [];
+        if (LooksLikeAnswerToPriorAssistantQuestion(turns, prompt))
+        {
+            // Prefer continuity: never show the "new topic" banner for clarification answers.
+            intents &= ~IntentKind.NewTopic;
+            intents |= IntentKind.ContinueConversation;
+        }
+
         // Deterministic safety net: URLs/DOIs/arXiv/etc imply retrieval even if the classifier misses.
         var hardIntents = HardSignalsAsIntents(prompt);
         intents |= hardIntents;
@@ -144,26 +156,7 @@ public static partial class ToolRouter
             intents |= IntentKind.Chat;
         }
 
-        // Document defaults to document-only unless the user explicitly asks for a chat reply.
-        if (intents.HasFlag(IntentKind.Document) && !intents.HasFlag(IntentKind.Chat) && MentionsChatReply(prompt))
-        {
-            intents |= IntentKind.Chat;
-        }
-
-        // Default web search for consumer-curiosity prompts when the classifier didn't mark search.
-        if (!intents.HasFlag(IntentKind.SearchWeb)
-            && !intents.HasFlag(IntentKind.SearchWiki)
-            && !intents.HasFlag(IntentKind.SearchScholar)
-            && LooksLikeCuriosityPrompt(prompt))
-        {
-            intents |= IntentKind.SearchWeb;
-        }
-
         var newTopic = detection.NewTopic;
-        if (!newTopic && LooksLikeNewTopic(recentTurns ?? [], prompt))
-        {
-            newTopic = true;
-        }
 
         intents |= newTopic ? IntentKind.NewTopic : IntentKind.ContinueConversation;
 
@@ -222,46 +215,48 @@ public static partial class ToolRouter
 
         query ??= InferMissingQuery(prompt, intents);
 
-        var plan = BindQuery(new Plan(steps, query) { Intents = intents, ClarificationQuestion = detection.ClarificationQuestion }, prompt);
-        return plan;
+        return BindQuery(new Plan(steps, query) { Intents = intents, ClarificationQuestion = detection.ClarificationQuestion }, prompt);
     }
 
-    public static bool LooksLikeNewTopic(IReadOnlyList<ChatTurn> recentTurns, string prompt)
+    private static bool LooksLikeAnswerToPriorAssistantQuestion(IReadOnlyList<ChatTurn> recentTurns, string prompt)
     {
         if (recentTurns.Count == 0 || string.IsNullOrWhiteSpace(prompt))
         {
             return false;
         }
 
-        var promptWords = SignificantWords(prompt);
-        if (promptWords.Count < 2)
+        var last = recentTurns[^1];
+        if (last.Role != "assistant")
         {
             return false;
         }
 
-        var historyWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var turn in recentTurns)
-        {
-            foreach (var word in SignificantWords(turn.Content))
-            {
-                historyWords.Add(word);
-            }
-        }
-
-        if (historyWords.Count == 0)
+        // Any assistant question implies the user reply is likely a continuation.
+        if (!LooksLikeQuestion(last.Content))
         {
             return false;
         }
 
-        foreach (var word in promptWords)
+        // Extremely short replies like "ok" are more likely acknowledgements than answers; don't
+        // override topic detection for those.
+        var trimmed = prompt.Trim();
+        if (trimmed.Length < 2)
         {
-            if (historyWords.Contains(word))
-            {
-                return false;
-            }
+            return false;
         }
 
         return true;
+    }
+
+    private static bool LooksLikeQuestion(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        // Cross-language enough for our current UX: explicit question marks.
+        return text.Contains('?', StringComparison.Ordinal) || text.Contains('¿', StringComparison.Ordinal);
     }
 
     public static bool HasScholarIdentifier(string prompt)
@@ -276,37 +271,6 @@ public static partial class ToolRouter
             || PubmedId().IsMatch(prompt);
     }
 
-    private static List<string> SignificantWords(string text)
-    {
-        var words = new List<string>();
-        foreach (Match match in WordToken().Matches(text))
-        {
-            if (match.Value.Length > 3)
-            {
-                words.Add(match.Value);
-            }
-        }
-
-        return words;
-    }
-
-    private static bool LooksLikeCuriosityPrompt(string prompt)
-    {
-        if (string.IsNullOrWhiteSpace(prompt))
-        {
-            return false;
-        }
-
-        // Keep this intentionally small (cross-language): Spanish and English patterns we already
-        // see in usage.
-        return prompt.Contains("what do you know about", StringComparison.OrdinalIgnoreCase)
-            || prompt.Contains("tell me about", StringComparison.OrdinalIgnoreCase)
-            || prompt.Contains("did you hear about", StringComparison.OrdinalIgnoreCase)
-            || prompt.Contains("qué sabes de", StringComparison.OrdinalIgnoreCase)
-            || prompt.Contains("que sabes de", StringComparison.OrdinalIgnoreCase)
-            || prompt.Contains("háblame de", StringComparison.OrdinalIgnoreCase)
-            || prompt.Contains("hablame de", StringComparison.OrdinalIgnoreCase);
-    }
 
     private static IntentKind HardSignalsAsIntents(string prompt)
     {
@@ -522,23 +486,6 @@ public static partial class ToolRouter
         return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
     }
 
-    private static bool MentionsChatReply(string prompt)
-    {
-        if (string.IsNullOrWhiteSpace(prompt))
-        {
-            return false;
-        }
-
-        // Keep this intentionally conservative: only treat as "chat + document" when the user
-        // explicitly references the chat response as a separate deliverable.
-        return prompt.Contains("in chat", StringComparison.OrdinalIgnoreCase)
-            || prompt.Contains("here in chat", StringComparison.OrdinalIgnoreCase)
-            || prompt.Contains("reply here", StringComparison.OrdinalIgnoreCase)
-            || prompt.Contains("answer here", StringComparison.OrdinalIgnoreCase)
-            || prompt.Contains("en el chat", StringComparison.OrdinalIgnoreCase)
-            || prompt.Contains("responde aquí", StringComparison.OrdinalIgnoreCase)
-            || prompt.Contains("responde aca", StringComparison.OrdinalIgnoreCase);
-    }
 
     private static bool Truthy(JsonElement root, string name)
     {
@@ -551,8 +498,72 @@ public static partial class ToolRouter
             || (value.ValueKind == JsonValueKind.String && value.GetString() is "true" or "1");
     }
 
-    [GeneratedRegex(@"\{[^{}]*\}", RegexOptions.Singleline)]
-    private static partial Regex JsonObject();
+    private static string? TryExtractJsonObject(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        var depth = 0;
+        var start = -1;
+        var inString = false;
+        var escaped = false;
+
+        for (var i = 0; i < raw.Length; i++)
+        {
+            var ch = raw[i];
+            if (inString)
+            {
+                if (escaped)
+                {
+                    escaped = false;
+                    continue;
+                }
+
+                if (ch == '\\')
+                {
+                    escaped = true;
+                    continue;
+                }
+
+                if (ch == '"')
+                {
+                    inString = false;
+                }
+
+                continue;
+            }
+
+            if (ch == '"')
+            {
+                inString = true;
+                continue;
+            }
+
+            if (ch == '{')
+            {
+                if (depth == 0)
+                {
+                    start = i;
+                }
+
+                depth++;
+                continue;
+            }
+
+            if (ch == '}' && depth > 0)
+            {
+                depth--;
+                if (depth == 0 && start >= 0)
+                {
+                    return raw.Substring(start, i - start + 1);
+                }
+            }
+        }
+
+        return null;
+    }
 
     [GeneratedRegex(@"\barxiv\.org\b|\b\d{4}\.\d{4,5}(v\d+)?\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ArxivId();
@@ -566,7 +577,6 @@ public static partial class ToolRouter
     [GeneratedRegex(@"^[^\p{L}]*(\p{L}+)", RegexOptions.CultureInvariant)]
     private static partial Regex FirstWord();
 
-    [GeneratedRegex(@"\p{L}+", RegexOptions.CultureInvariant)]
-    private static partial Regex WordToken();
+    
 }
 
