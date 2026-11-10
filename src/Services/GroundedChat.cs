@@ -59,9 +59,17 @@ public sealed class GroundedChat
         var history = conversation.ToList();
         conversation.Add(new ChatTurn("user", userText));
 
-        var hard = ToolRouter.HardSignals(userText);
-        var suggested = await engine.SuggestToolsAsync(history, userText, cancellationToken);
-        var plan = ToolRouter.PlanForTurn(userText, hard, suggested, hasAttachments, history);
+        var detection = await engine.DetectIntentsAsync(history, userText, cancellationToken);
+        var plan = ToolRouter.PlanForTurn(userText, detection, hasAttachments, history);
+
+        if (plan.ClarifyInChat)
+        {
+            var question = string.IsNullOrWhiteSpace(plan.ClarificationQuestion)
+                ? "Can you clarify what you want me to do?"
+                : plan.ClarificationQuestion;
+            conversation.Add(new ChatTurn("assistant", question));
+            return new GroundedReply(question, plan, [], null);
+        }
         if (plan.Any)
         {
             HostLog.Line("tools", $"web={plan.Web} wiki={plan.Wiki} scholar={plan.Scholar}");
@@ -101,7 +109,7 @@ public sealed class GroundedChat
         {
             try
             {
-                var scholarText = ToolRouter.HardSignals(userText).Scholar ? null : plan.Query;
+                var scholarText = ToolRouter.HasScholarIdentifier(userText) ? null : plan.Query;
                 var scholar = await _scholar.EnrichAsync(userText, scholarText, cancellationToken);
                 InsertBeforeLastUser(turns, scholar.Turn);
                 citations.AddRange(scholar.Citations);

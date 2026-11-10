@@ -50,6 +50,6 @@ public sealed class NoChatEngine : IChatEngine
     // No real model to ask for a topic - caller falls back to a truncated-prompt title.
     public Task<string?> TryGenerateTitleAsync(string prompt, CancellationToken cancellationToken) => Task.FromResult<string?>(null);
 
-    public Task<ToolRouter.Plan> SuggestToolsAsync(IReadOnlyList<ChatTurn> recentTurns, string prompt, CancellationToken cancellationToken) =>
-        Task.FromResult(ToolRouter.HardSignals(prompt) with { Folder = true });
+    public Task<ToolRouter.IntentDetection> DetectIntentsAsync(IReadOnlyList<ChatTurn> recentTurns, string prompt, CancellationToken cancellationToken) =>
+        Task.FromResult(ToolRouter.IntentDetection.Default);
 }

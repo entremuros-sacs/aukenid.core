@@ -3,9 +3,13 @@ namespace Aukenid.CLI;
 using System;
 using System.Collections.Generic;
 using System.IO;
+	using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+	using Aukenid.Core.Attachments;
+	using Aukenid.Core.Contracts;
+	using Aukenid.Core.Data;
 using Aukenid.Core.Engine;
 using Aukenid.Core.Services;
 
@@ -119,6 +123,13 @@ internal sealed class CliApp
 {
     private readonly HashSet<string> _exitWords = new(StringComparer.OrdinalIgnoreCase) { "exit", "quit", "end" };
 
+    private readonly List<string> _stickyAttachmentNames = [];
+    private readonly AttachmentReaderRegistry _attachmentReaders = new();
+
+    private ConversationStore? _conversationStore;
+    private TurnOrchestrator? _turnOrchestrator;
+    private ThreadDto? _activeThread;
+
     private CancellationTokenSource? _activeTurnCts;
 
     public CliApp() { }
@@ -140,12 +151,20 @@ internal sealed class CliApp
             engine.UseTemplate(options.Template);
         }
 
-        using var session = AukenidSession.CreateDefault(engine);
+	    var storeRoot = Path.Combine(Path.GetTempPath(), "Aukenid", "cli");
+	    _conversationStore = new ConversationStore(storeRoot);
+	    _activeThread = _conversationStore.CreateThread("CLI", ConversationStore.TemporalFolder);
+
+	    var webEnricher = new WebEnricher(new StartpageSearchProvider(), new WebFetchService());
+	    var scholarEnricher = new ScholarEnricher(new SemanticScholarProvider());
+	    var wikiEnricher = new WikiEnricher(new WikipediaProvider());
+	    var documentTool = new DocumentTool(_conversationStore);
+	    _turnOrchestrator = new TurnOrchestrator(engine, _conversationStore, _attachmentReaders, webEnricher, scholarEnricher, wikiEnricher, documentTool);
 
         Console.WriteLine($"Loading {Path.GetFileName(ggufPath)} ...");
-        await session.LoadModelAsync(ggufPath, CancellationToken.None);
+	    await engine.LoadModelAsync(ggufPath, CancellationToken.None);
 
-        var modelName = session.ActiveModelName ?? Path.GetFileNameWithoutExtension(ggufPath);
+	    var modelName = engine.ActiveModelName ?? Path.GetFileNameWithoutExtension(ggufPath);
         Console.WriteLine($"Ready ({modelName}). Type /help for commands. Type exit/quit/end to stop.");
         Console.WriteLine();
 
@@ -177,11 +196,11 @@ internal sealed class CliApp
 
             if (text.StartsWith("/", StringComparison.Ordinal))
             {
-                HandleCommand(session, text);
+	            HandleCommand(text);
                 continue;
             }
 
-            await HandleUserMessageAsync(session, text, shutdownCts.Token);
+	        await HandleUserMessageAsync(text, shutdownCts.Token);
         }
 
         return 0;
@@ -206,21 +225,78 @@ internal sealed class CliApp
         return true;
     }
 
-    private async Task HandleUserMessageAsync(AukenidSession session, string text, CancellationToken shutdownToken)
+	private async Task HandleUserMessageAsync(string text, CancellationToken shutdownToken)
     {
         _activeTurnCts?.Dispose();
         _activeTurnCts = CancellationTokenSource.CreateLinkedTokenSource(shutdownToken);
 
+	    if (_conversationStore is null || _turnOrchestrator is null || _activeThread is null)
+	    {
+	        Console.WriteLine();
+	        Console.WriteLine("[not initialized]");
+	        Console.WriteLine();
+	        return;
+	    }
+
         try
         {
             Console.Write("aukenid> ");
-            var reply = await session.SendAsync(text, _activeTurnCts.Token);
-            PrintPlan(reply.Plan);
-            WriteAssistantReply(reply.Text);
-            if (!string.IsNullOrWhiteSpace(reply.NoticeKey))
-            {
-                Console.WriteLine($"[{reply.NoticeKey}]");
-            }
+	        var existing = _conversationStore.ListMessages(_activeThread.Id);
+	        var isFirstMessage = existing.Count == 0;
+	        var parentId = existing.LastOrDefault()?.Id;
+
+	        var userMessageId = Guid.CreateVersion7().ToString();
+	        var assistantMessageId = Guid.CreateVersion7().ToString();
+	        var storedAttachments = _stickyAttachmentNames.Count > 0
+	            ? _stickyAttachmentNames.ToArray()
+	            : Array.Empty<string>();
+
+	        _conversationStore.SaveMessage(new MessageDto(
+	            userMessageId,
+	            _activeThread.Id,
+	            parentId,
+	            "user",
+	            text,
+	            DateTimeOffset.UtcNow,
+	            storedAttachments.Length == 0 ? null : storedAttachments));
+
+	        var result = await _turnOrchestrator.ExecuteAsync(
+	            new TurnOrchestrator.TurnRequest(
+	                _activeThread.Id,
+	                userMessageId,
+	                assistantMessageId,
+	                parentId,
+	                text,
+	                isFirstMessage,
+	                AlreadyHaveUserMessage: false,
+	                ExistingMessages: existing,
+	                StoredAttachmentNames: storedAttachments),
+	            new CliTurnEventSink(),
+	            tryBuildKnowledgeTurnAsync: null,
+	            _activeTurnCts.Token);
+
+	        PrintPlan(result.Plan);
+
+	        var assistantContent = result.Content;
+	        if (result.ToolWarning is not null)
+	        {
+	            assistantContent = string.IsNullOrWhiteSpace(assistantContent)
+	                ? $"%%auk:{result.ToolWarning}%%"
+	                : $"%%auk:{result.ToolWarning}%%\n\n" + assistantContent;
+	        }
+
+	        if (!string.IsNullOrWhiteSpace(assistantContent))
+	        {
+	            _conversationStore.SaveMessage(new MessageDto(
+	                assistantMessageId,
+	                _activeThread.Id,
+	                userMessageId,
+	                "Aukenid",
+	                assistantContent,
+	                DateTimeOffset.UtcNow));
+	        }
+
+	        WriteAssistantReply(assistantContent);
 
             Console.WriteLine();
         }
@@ -257,7 +333,7 @@ internal sealed class CliApp
         Console.WriteLine(sources);
     }
 
-    private void HandleCommand(AukenidSession session, string input)
+	private void HandleCommand(string input)
     {
         var parsed = CommandLine.Parse(input);
         switch (parsed.Command)
@@ -267,20 +343,20 @@ internal sealed class CliApp
                 return;
 
             case "/attach":
-                HandleAttach(session, parsed.Rest);
+	            HandleAttach(parsed.Rest);
                 return;
 
             case "/save-doc":
-                HandleSaveDoc(session, parsed.Rest);
+	            HandleSaveDoc(parsed.Rest);
                 return;
 
             case "/save-thread":
-                HandleSaveThread(session, parsed.Rest);
+	            HandleSaveThread(parsed.Rest);
                 return;
 
             case "/new":
             case "/new-thread":
-                HandleNewThread(session);
+	            HandleNewThread();
                 return;
 
             default:
@@ -290,8 +366,15 @@ internal sealed class CliApp
         }
     }
 
-    private void HandleAttach(AukenidSession session, string rest)
+	private void HandleAttach(string rest)
     {
+	    if (_conversationStore is null || _activeThread is null)
+	    {
+	        Console.WriteLine("[not initialized]");
+	        Console.WriteLine();
+	        return;
+	    }
+
         if (string.IsNullOrWhiteSpace(rest))
         {
             Console.WriteLine("Usage: /attach <path>");
@@ -299,21 +382,29 @@ internal sealed class CliApp
             return;
         }
 
-        var result = session.Attach(rest);
-        if (result.Ok)
-        {
-            Console.WriteLine($"Attached: {result.FileName} ({result.ExtractedChars ?? 0} chars)");
-        }
-        else
-        {
-            Console.WriteLine($"Attach failed: {result.FileName} [{result.ErrorKey}]");
-        }
+	    var storedName = _conversationStore.SaveAttachment(_activeThread.Id, rest);
+	    if (storedName is null)
+	    {
+	        Console.WriteLine("Attach failed.");
+	        Console.WriteLine();
+	        return;
+	    }
+
+	    _stickyAttachmentNames.Add(storedName);
+	    Console.WriteLine($"Attached: {storedName}");
 
         Console.WriteLine();
     }
 
-    private void HandleSaveDoc(AukenidSession session, string rest)
+	private void HandleSaveDoc(string rest)
     {
+	    if (_conversationStore is null || _activeThread is null)
+	    {
+	        Console.WriteLine("[not initialized]");
+	        Console.WriteLine();
+	        return;
+	    }
+
         if (string.IsNullOrWhiteSpace(rest))
         {
             Console.WriteLine("Usage: /save-doc <path.md>");
@@ -321,21 +412,31 @@ internal sealed class CliApp
             return;
         }
 
-        var result = session.SaveDocument(rest);
-        if (result.Ok)
-        {
-            Console.WriteLine($"Saved document ({result.WrittenChars} chars).");
-        }
-        else
-        {
-            Console.WriteLine($"Save failed [{result.ErrorKey}].");
-        }
+	    var content = _conversationStore.ReadDocument(_activeThread.Id);
+	    if (content is null)
+	    {
+	        Console.WriteLine("No document exists yet.");
+	        Console.WriteLine();
+	        return;
+	    }
+
+	    var fullPath = Path.GetFullPath(rest);
+	    Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+	    File.WriteAllText(fullPath, content);
+	    Console.WriteLine($"Saved document ({content.Length} chars).");
 
         Console.WriteLine();
     }
 
-    private void HandleSaveThread(AukenidSession session, string rest)
+	private void HandleSaveThread(string rest)
     {
+	    if (_conversationStore is null || _activeThread is null)
+	    {
+	        Console.WriteLine("[not initialized]");
+	        Console.WriteLine();
+	        return;
+	    }
+
         if (string.IsNullOrWhiteSpace(rest))
         {
             Console.WriteLine("Usage: /save-thread <path.md>");
@@ -343,54 +444,85 @@ internal sealed class CliApp
             return;
         }
 
-        var result = session.SaveThread(rest);
-        if (result.Ok)
-        {
-            Console.WriteLine($"Saved thread ({result.WrittenChars} chars).");
-        }
-        else
-        {
-            Console.WriteLine($"Save failed [{result.ErrorKey}].");
-        }
+	    var thread = _conversationStore.ListThreads().FirstOrDefault(t => t.Id == _activeThread.Id);
+	    if (thread is null)
+	    {
+	        Console.WriteLine("Thread not found.");
+	        Console.WriteLine();
+	        return;
+	    }
+
+	    var messages = _conversationStore.ListMessages(_activeThread.Id);
+	    var markdown = ConversationMarkdown.BuildHeader(thread) + string.Concat(messages.Select(ConversationMarkdown.FormatMessageBlock));
+
+	    var fullPath = Path.GetFullPath(rest);
+	    Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+	    File.WriteAllText(fullPath, markdown);
+	    Console.WriteLine($"Saved thread ({markdown.Length} chars).");
 
         Console.WriteLine();
     }
 
-    private void HandleNewThread(AukenidSession session)
+	private void HandleNewThread()
     {
+	    if (_conversationStore is null)
+	    {
+	        Console.WriteLine("[not initialized]");
+	        Console.WriteLine();
+	        return;
+	    }
+
         if (!Confirm("Start a new thread? This clears chat transcript and attachments. Are you sure? (y/N) "))
         {
             Console.WriteLine();
             return;
         }
 
-        if (session.HasDocument)
-        {
-            var prompt = session.IsDocumentDirty
-                ? "Document has unsaved changes. Save it before starting a new thread? (y/N) "
-                : "Document exists. Save a copy before starting a new thread? (y/N) ";
+	    if (_activeThread is not null)
+	    {
+	        var doc = _conversationStore.ReadDocument(_activeThread.Id);
+	        if (!string.IsNullOrWhiteSpace(doc))
+	        {
+	            if (Confirm("Document exists. Save a copy before starting a new thread? (y/N) "))
+	            {
+	                Console.Write("Path for document (.md): ");
+	                var path = (Console.ReadLine() ?? string.Empty).Trim();
+	                if (path.Length > 0)
+	                {
+	                    var fullPath = Path.GetFullPath(path);
+	                    Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+	                    File.WriteAllText(fullPath, doc);
+	                }
+	            }
+	        }
+	    }
 
-            if (Confirm(prompt))
-            {
-                Console.Write("Path for document (.md): ");
-                var path = (Console.ReadLine() ?? string.Empty).Trim();
-                if (path.Length > 0)
-                {
-                    var save = session.SaveDocument(path);
-                    if (!save.Ok)
-                    {
-                        Console.WriteLine($"Save failed [{save.ErrorKey}]. Aborting /new-thread.");
-                        Console.WriteLine();
-                        return;
-                    }
-                }
-            }
-        }
-
-        session.NewThread();
+	    _stickyAttachmentNames.Clear();
+	    _activeThread = _conversationStore.CreateThread("CLI", ConversationStore.TemporalFolder);
         Console.WriteLine("New thread started.");
         Console.WriteLine();
     }
+
+	private sealed class CliTurnEventSink : ITurnEventSink
+	{
+	    public void Emit(ITurnEvent @event)
+	    {
+	        // Best-effort compatibility: the desktop consumes every event, the CLI only
+	        // prints a small subset (progress/status). Token streaming is intentionally
+	        // handled via the final aggregated assistant reply.
+	        if (@event is PendingEvent pending)
+	        {
+	            if (pending.PageFrom is not null || pending.PageTo is not null)
+	            {
+	                Console.WriteLine($"[{pending.Key} {pending.PageFrom}-{pending.PageTo}]");
+	            }
+	            else
+	            {
+	                Console.WriteLine($"[{pending.Key}]");
+	            }
+	        }
+	    }
+	}
 
     private bool Confirm(string prompt)
     {
@@ -421,7 +553,7 @@ internal sealed class CliApp
             Commands:
               /help                 Show this help
               /attach <path>         Attach a local file (sticky)
-              /save-doc <path.md>    Save the in-memory document
+              /save-doc <path.md>    Save the current thread document
               /save-thread <path.md> Save the current thread transcript
               /new or /new-thread    Start a new thread (clears attachments + transcript)
 

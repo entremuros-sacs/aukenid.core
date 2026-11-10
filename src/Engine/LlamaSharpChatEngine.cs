@@ -256,11 +256,11 @@ public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
     // Asks the same local model for a short topic title instead of just truncating the raw prompt.
     // StatelessExecutor builds a fresh completion per call (no shared conversation state), but it's not
     // safe to run concurrently with the main response, so this must be awaited before that starts.
-    public Task<ToolRouter.Plan> SuggestToolsAsync(IReadOnlyList<ChatTurn> recentTurns, string prompt, CancellationToken cancellationToken)
+    public Task<ToolRouter.IntentDetection> DetectIntentsAsync(IReadOnlyList<ChatTurn> recentTurns, string prompt, CancellationToken cancellationToken)
     {
         if (_executor is null)
         {
-            return Task.FromResult(new ToolRouter.Plan(Wiki: false, Scholar: false, Web: false, Folder: true));
+            return Task.FromResult(ToolRouter.IntentDetection.Default);
         }
 
         return Task.Run(async () =>
@@ -290,106 +290,16 @@ public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
                     raw += token;
                 }
 
-                var plan = ToolRouter.ParseModelPlan(raw);
-                HostLog.Line("tools", $"classifier web={plan.Web} wiki={plan.Wiki} scholar={plan.Scholar} document={plan.Document} folder={plan.Folder} newTopic={plan.NewTopic}");
-
-                // First user message / topic change: normalize the user's message into a search query.
-                // Some clients seed a new thread with an initial assistant turn (so recentTurns.Count
-                // may be > 0). Detect "first user message" by role instead of relying on count.
-                //
-                // This must also be able to *enable* web for consumer prompts like
-                // "what do you know about X" even when the classifier stays all-false.
-                var isFirstUserMessage = recentTurns.All(t => t.Role != "user");
-                if (isFirstUserMessage || recentTurns.Count == 0 || plan.NewTopic)
-                {
-                    var hasUrl = WebContext.FirstPastedHttpUrl(prompt) is not null
-                        || WebContext.FirstPastedHttpsUrlFromBareDomain(prompt) is not null;
-
-                    if (!hasUrl)
-                    {
-                        var rewritten = await RewriteSearchQueryAsync(prompt, cancellationToken);
-                        if (!string.IsNullOrWhiteSpace(rewritten))
-                        {
-                            plan = plan.Web
-                                ? plan with { Query = rewritten }
-                                : plan.Any
-                                    ? plan
-                                    : plan with { Web = true, Query = rewritten };
-                        }
-                    }
-                }
-
-                return plan;
+                var detection = ToolRouter.ParseIntentDetection(raw);
+                HostLog.Line("tools", $"intent intents={detection.Intents} q=\"{detection.Query}\" folder={detection.Folder} newTopic={detection.NewTopic} documentVerbatim={detection.DocumentVerbatim} needClarification={detection.HasIntent(ToolRouter.IntentKind.NeedClarification)}");
+                return detection;
             }
             catch (Exception ex)
             {
                 HostLog.Line("tools", "classifier failed " + HostLog.Describe(ex));
-                return new ToolRouter.Plan(Wiki: false, Scholar: false, Web: false, Folder: true);
+                return ToolRouter.IntentDetection.Default;
             }
         }, cancellationToken);
-    }
-
-    private async Task<string?> RewriteSearchQueryAsync(string prompt, CancellationToken cancellationToken)
-    {
-        if (_executor is null)
-        {
-            return null;
-        }
-
-        // Fail-safe: a slow/stuck rewrite must never stall the entire user turn.
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(4));
-
-        var rewritePrompt = FormatTurns(
-        [
-            new ChatTurn("system", PromptLibrary.Get(PromptKey.ToolQueryRewriteSystem)),
-            new ChatTurn("user", prompt),
-        ]);
-
-        var inferenceParams = new InferenceParams
-        {
-            MaxTokens = 24,
-            SamplingPipeline = new DefaultSamplingPipeline { Temperature = 0.1f },
-        };
-
-        try
-        {
-            var raw = string.Empty;
-            await foreach (var token in _executor.InferAsync(rewritePrompt, inferenceParams, timeout.Token))
-            {
-                raw += token;
-            }
-
-            return CleanQuery(raw);
-        }
-        catch (OperationCanceledException)
-        {
-            return null;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static string? CleanQuery(string raw)
-    {
-        var normalized = string.Join(' ', raw.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-        normalized = normalized.Trim('"', '\'', ' ', '.', ',', ';', ':', '!', '?', '\n', '\r');
-
-        if (normalized.Length == 0)
-        {
-            return null;
-        }
-
-        var words = normalized.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length > 8)
-        {
-            normalized = string.Join(' ', words.Take(8));
-        }
-
-        const int maxLength = 120;
-        return normalized.Length <= maxLength ? normalized : normalized[..maxLength].TrimEnd();
     }
 
     private static string BuildRouteUserTurn(IReadOnlyList<ChatTurn> recentTurns, string prompt)
