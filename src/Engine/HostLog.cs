@@ -6,6 +6,9 @@ using System.Text.RegularExpressions;
 /// <summary>Short host diagnostics on stderr. Never dump prompts, attachment paths, or file contents.</summary>
 public static class HostLog
 {
+    // Keep host diagnostic output disabled by default (privacy/perf).
+    private static volatile bool _enabled;
+
     private static readonly Regex SecretAssignment = new(
         @"\b(api[_-]?key|secret|token|password|authorization)\b\s*[=:]\s*\S+",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -16,8 +19,19 @@ public static class HostLog
         @"(?<![A-Za-z0-9])(?:[A-Za-z]:\\|\\\\|/)[^\r\n""']+",
         RegexOptions.Compiled);
 
+    /// <summary>
+    /// Enables host diagnostic output (stderr). Intended to be toggled by the desktop host
+    /// when launched with the <c>--diag</c> flag.
+    /// </summary>
+    public static void SetEnabled(bool enabled) => _enabled = enabled;
+
+    public static bool Enabled => _enabled;
+
     public static void Line(string area, string detail)
     {
+        if (!_enabled)
+            return;
+
         Console.Error.WriteLine($"aukenid {area}: {Sanitize(detail)}");
     }
 
