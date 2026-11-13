@@ -9,6 +9,10 @@ public static class HostLog
     // Keep host diagnostic output disabled by default (privacy/perf).
     private static volatile bool _enabled;
 
+    // Redaction is enabled by default. It can be disabled for local debugging
+    // sessions (for example when running with --diag).
+    private static volatile bool _redactionEnabled = true;
+
     private static readonly Regex SecretAssignment = new(
         @"\b(api[_-]?key|secret|token|password|authorization)\b\s*[=:]\s*\S+",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -25,6 +29,12 @@ public static class HostLog
     /// </summary>
     public static void SetEnabled(bool enabled) => _enabled = enabled;
 
+    /// <summary>
+    /// Enables or disables redaction of sensitive values/paths in host logs.
+    /// WARNING: Disabling redaction may leak secrets to stderr/log files.
+    /// </summary>
+    public static void SetRedactionEnabled(bool enabled) => _redactionEnabled = enabled;
+
     public static bool Enabled => _enabled;
 
     public static void Line(string area, string detail)
@@ -32,7 +42,8 @@ public static class HostLog
         if (!_enabled)
             return;
 
-        Console.Error.WriteLine($"aukenid {area}: {Sanitize(detail)}");
+        var output = _redactionEnabled ? Sanitize(detail) : detail;
+        Console.Error.WriteLine($"aukenid {area}: {output}");
     }
 
     public static string Describe(Exception ex)
@@ -41,6 +52,13 @@ public static class HostLog
         while (innermost.InnerException is not null)
         {
             innermost = innermost.InnerException;
+        }
+
+        if (!_redactionEnabled)
+        {
+            var raw = innermost.Message ?? string.Empty;
+            raw = string.Join(' ', raw.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+            return raw.Length == 0 ? ex.GetType().Name : $"{ex.GetType().Name}: {raw}";
         }
 
         var message = Sanitize(innermost.Message);
@@ -57,6 +75,11 @@ public static class HostLog
 
     public static string Sanitize(string text)
     {
+        if (!_redactionEnabled)
+        {
+            return text ?? string.Empty;
+        }
+
         if (string.IsNullOrEmpty(text))
         {
             return string.Empty;
