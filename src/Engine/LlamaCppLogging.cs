@@ -26,12 +26,12 @@ public static class LlamaCppLogging
     /// </summary>
     public static string? Detail(bool error, string message)
     {
-        if (!LooksLikePromptDump(message) && message.Length <= 120)
+        if (!LooksLikePromptDump(message)
+            && !LooksLikePathDump(message)
+            && message.Length <= 120)
         {
             var safe = HostLog.Sanitize(message);
-            if (safe.Length > 0
-                && !safe.Contains("[path]", StringComparison.Ordinal)
-                && !safe.Contains("[redacted]", StringComparison.Ordinal))
+            if (safe.Length > 0)
             {
                 return safe;
             }
@@ -73,4 +73,17 @@ public static class LlamaCppLogging
         || message.Contains("llama_context:", StringComparison.Ordinal)
         || message.IndexOf("n_keep", StringComparison.OrdinalIgnoreCase) >= 0
         || message.Trim().Trim('.').Length == 0;
+
+    private static bool LooksLikePathDump(string message)
+    {
+        // When llama.cpp fails to load a model it often prints full paths.
+        // Keep the console clean and avoid echoing host file system details.
+        if (message.IndexOf(".gguf", StringComparison.OrdinalIgnoreCase) < 0)
+        {
+            return false;
+        }
+
+        return message.Contains("/", StringComparison.Ordinal)
+            || message.Contains("\\", StringComparison.Ordinal);
+    }
 }
