@@ -3,7 +3,7 @@
   <PropertyGroup>
     <Title>Aukenid Core</Title>
     <Description>Local GGUF chat engine, conversation store, attachments, and web/wiki/scholar tools for Aukenid.</Description>
-    <VersionPrefix>3.8.1</VersionPrefix>    
+    <VersionPrefix>1.0.0</VersionPrefix>    
 
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
