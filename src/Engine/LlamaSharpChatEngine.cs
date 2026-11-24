@@ -2,6 +2,7 @@ namespace Aukenid.Core.Engine;
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -10,6 +11,7 @@ using System.Threading.Tasks;
 using LLama;
 using LLama.Common;
 using LLama.Exceptions;
+using LLama.Native;
 using LLama.Sampling;
 using LLama.Transformers;
 
@@ -41,6 +43,111 @@ public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
 
     public void UseTemplate(string? templateName) => _templateName = templateName;
 
+    // ------------------------------------------------------------------
+    // GGUF memory & performance tuning helpers
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Builds <see cref="ModelParams"/> with the base context size plus the engine's
+    /// memory/performance settings. When <paramref name="optimized"/> is true this enables
+    /// Flash Attention, larger batches, physical-core thread count, and Q8_0 KV-cache
+    /// quantization. When false it falls back to FP16 KV cache and no Flash Attention.
+    /// </summary>
+    private static ModelParams CreateModelParams(string path, bool optimized)
+    {
+        var p = new ModelParams(path)
+        {
+            // Gallery usable ctx (ADR-14). Size of the KV cache, not a product quota.
+            ContextSize = 8192,
+        };
+        ApplyOptimizationSettings(p, optimized);
+        return p;
+    }
+
+    /// <summary>
+    /// Applies memory-mapping, memory-locking, and (optionally) performance settings to
+    /// <see cref="ModelParams"/>. mmap is pinned <c>true</c> and mlock pinned <c>false</c>
+    /// so the behaviour is explicit and does not depend on LLamaSharp defaults.
+    /// </summary>
+    private static void ApplyOptimizationSettings(ModelParams p, bool optimized)
+    {
+        // --- Memory (always explicit) ---
+        p.UseMemorymap = true;   // map GGUF from SSD, page only what is needed
+        p.UseMemoryLock = false; // do not pin the whole model in physical RAM
+
+        if (!optimized)
+        {
+            return;
+        }
+
+        // --- Performance ---
+        p.FlashAttention = true;          // faster prompt ingest, lower peak memory spikes
+        p.BatchSize = 1024;               // n_batch: larger chunks vectorize better (~zero RAM cost)
+        p.UBatchSize = 1024;
+        p.Threads = GetPhysicalCoreCount(); // physical cores, not logical SMT threads
+        p.TypeK = GGMLType.GGML_TYPE_Q8_0; // KV cache quant: ~50% RAM vs FP16
+        p.TypeV = GGMLType.GGML_TYPE_Q8_0;
+    }
+
+    /// <summary>
+    /// Returns the number of physical performance cores. On macOS queries sysctl;
+    /// elsewhere falls back to half the logical count (rough SMT estimate), minimum 1.
+    /// </summary>
+    private static int GetPhysicalCoreCount()
+    {
+        try
+        {
+            if (OperatingSystem.IsMacOS())
+            {
+                var output = RunCommand("sysctl", "-n hw.perflevel.physicalcpu");
+                if (int.TryParse(output?.Trim(), out var pc) && pc > 0)
+                {
+                    return pc;
+                }
+                output = RunCommand("sysctl", "-n hw.physicalcpu");
+                if (int.TryParse(output?.Trim(), out pc) && pc > 0)
+                {
+                    return pc;
+                }
+            }
+        }
+        catch
+        {
+            // fall through to fallback
+        }
+
+        // Fallback: assume SMT / hyper-threading, use half of logical threads (min 1).
+        return Math.Max(1, Environment.ProcessorCount / 2);
+    }
+
+    private static string? RunCommand(string fileName, string arguments)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            using var proc = Process.Start(psi);
+            if (proc is null)
+            {
+                return null;
+            }
+            var output = proc.StandardOutput.ReadToEnd();
+            proc.WaitForExit(2000);
+            return output;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public Task LoadModelAsync(string profileId, CancellationToken cancellationToken)
     {
         // Photino's web-message callback runs on the UI thread; LLamaWeights.LoadFromFile is a
@@ -56,24 +163,60 @@ public sealed class LlamaSharpChatEngine : IChatEngine, IDisposable
                 throw new FileNotFoundException("GGUF model file not found.", path);
             }
 
-            var cpuParams = new ModelParams(path)
-            {
-                // Gallery usable ctx (ADR-14). Size of the KV cache, not a product quota.
-                ContextSize = 8192,
-            };
+            var cpuParams = CreateModelParams(path, optimized: true);
 
             // Prefer GPU backends when available, but fall back silently if it fails.
             var gpuParams = TryCreateGpuParams(path);
-            LLamaWeights newWeights;
-            StatelessExecutor newExecutor;
             if (gpuParams is not null)
             {
-                (newWeights, newExecutor) = TryLoadWithFallback(gpuParams, cpuParams);
+                ApplyOptimizationSettings(gpuParams, optimized: true);
+                gpuParams.NoKqvOffload = false; // keep KQV tensors on the GPU backend
             }
-            else
+
+            LLamaWeights newWeights;
+            StatelessExecutor newExecutor;
+            try
             {
-                newWeights = LLamaWeights.LoadFromFile(cpuParams);
-                newExecutor = new StatelessExecutor(newWeights, cpuParams);
+                if (gpuParams is not null)
+                {
+                    (newWeights, newExecutor) = TryLoadWithFallback(gpuParams, cpuParams);
+                }
+                else
+                {
+                    newWeights = LLamaWeights.LoadFromFile(cpuParams);
+                    newExecutor = new StatelessExecutor(newWeights, cpuParams);
+                    IsGpuEnabled = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                HostLog.Line("model", "Optimized GGUF load failed (KV quant / Flash Attention); retrying with safe FP16 params. " + HostLog.Describe(ex));
+
+                var safeCpu = CreateModelParams(path, optimized: false);
+                ModelParams? safeGpu = null;
+                if (gpuParams is not null)
+                {
+                    safeGpu = new ModelParams(path)
+                    {
+                        ContextSize = 8192,
+                        GpuLayerCount = 999,
+                        MainGpu = 0,
+                        NoKqvOffload = false,
+                    };
+                    ApplyOptimizationSettings(safeGpu, optimized: false);
+                }
+
+                if (safeGpu is not null)
+                {
+                    (newWeights, newExecutor) = TryLoadWithFallback(safeGpu, safeCpu);
+                    IsGpuEnabled = true;
+                }
+                else
+                {
+                    newWeights = LLamaWeights.LoadFromFile(safeCpu);
+                    newExecutor = new StatelessExecutor(newWeights, safeCpu);
+                    IsGpuEnabled = false;
+                }
             }
 
             var previous = _weights;
