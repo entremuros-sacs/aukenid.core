@@ -117,7 +117,7 @@ public sealed class ModelStoreTests
             var store = new ModelStore(root, new StaticHandler("gguf-bytes"u8.ToArray()));
             var dest = Path.Combine(root, "qwen35-4b.gguf");
 
-            await Assert.ThrowsExceptionAsync<ModelHashMismatchException>(() => store.DownloadAsync(
+            await Assert.ThrowsExactlyAsync<ModelHashMismatchException>(() => store.DownloadAsync(
                 "qwen35-4b",
                 "https://example.com/qwen.gguf",
                 progress: null,
@@ -178,7 +178,7 @@ public sealed class ModelStoreTests
             var existing = Path.Combine(root, "phi4-mini.gguf");
             File.WriteAllBytes(existing, "keep"u8.ToArray());
 
-            await Assert.ThrowsExceptionAsync<ModelHashMismatchException>(() => store.DownloadAsync(
+            await Assert.ThrowsExactlyAsync<ModelHashMismatchException>(() => store.DownloadAsync(
                 "phi4-mini",
                 "https://example.com/phi.gguf",
                 progress: null,
